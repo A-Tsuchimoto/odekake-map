@@ -27,51 +27,54 @@ data/
   spots.json              スポットの元データ。ここを直して npm run build:spots
 scripts/
   build-spots.mjs         spots.json → spots.js の生成と検査
-wrangler.toml             Pagesの設定とKVバインディング
-.github/workflows/deploy.yml   pushしたら自動でデプロイ（使わなくてもよい）
+wrangler.toml             Pagesの設定とKVバインディング（設定の正はこれ）
+.github/workflows/check.yml    push時に spots データを検査する（デプロイはCloudflare側）
 ```
 
 ## 公開の手順
 
-Cloudflare のアカウントと、`npx wrangler login`（またはAPIトークン）が要る。
+GitHub連携（Workers & Pages > Create > Pages > Connect to Git）で運用している。
+push すると Cloudflare 側が勝手にビルドして出す。CLIは要らない。
 
-```bash
-npm install
+設定の正は `wrangler.toml`。ダッシュボードでは同じ項目が灰色になって編集できないので、
+バインディングを変えるときはこのファイルを直して push する。
+例外は**あいことば（APP_TOKEN）**で、これはファイルに書けないのでダッシュボードで入れる。
 
-# 1. 記録を入れるKVを2つ作る。出てきた id を wrangler.toml の該当箇所に貼る
-npx wrangler kv namespace create RECORDS           # → 本番用 id
-npx wrangler kv namespace create RECORDS_PREVIEW   # → プレビュー用 id
+初回にやること。
 
-# 2. Pagesプロジェクトを作る（プロジェクト名は odekake-map）
-npx wrangler pages project create odekake-map
-
-# 3. あいことばを登録する。これを知っている端末だけが記録を読み書きできる
-npx wrangler pages secret put APP_TOKEN
-
-# 4. 公開
-npm run deploy
-```
+1. **KVを作る** — ダッシュボード左 **Storage & Databases > KV**（Workers KV の画面）で
+   **Create instance**。名前は `odekake-map-records`。作った行に出る
+   **Namespace ID**（32桁の英数字）をコピーする
+2. **IDを貼る** — `wrangler.toml` の `PUT_YOUR_KV_NAMESPACE_ID_HERE` を差し替えて push。
+   GitHubのWeb編集でもよい。ここが未設定だとデプロイが失敗する
+3. **あいことばを入れる** — Pagesプロジェクト > **Settings > Variables and Secrets > Add**。
+   Type は **Secret**、名前は `APP_TOKEN`、値は好きな文字列。Production に入れる
+4. **もう一度デプロイする** — シークレットもバインディングも、**入れただけでは効かない**。
+   Deployments の最新デプロイの **⋯ > Retry deployment**（または空push）で作り直す
 
 `https://odekake-map.pages.dev` で開く。スマホで開いて「ホーム画面に追加」。
 
 初回だけ、パネルの「あいことば」に APP_TOKEN と同じ文字列を入れて「つなぐ」を押す。
 以後その端末には保存され、記録は自動でKVに書かれる。
 
+うまくいかないときは `/api/records` を直接開く。401なら正常（あいことば無しなので）。
+500なら KV かシークレットが効いていない＝手順4のやり直し漏れ。
+
+### プレビュー（本番ブランチ以外）
+
+別ブランチを push するとプレビューURLが出る。プレビューにKVを効かせたいときは、
+KVをもう1つ作って `wrangler.toml` の `[env.preview]` のコメントを外す。
+本番の記録を触らせないよう、名前空間は必ず分けること。
+
 ### 手元で動かす
 
 ```bash
+npm install
 cp .dev.vars.example .dev.vars   # APP_TOKEN=すきなあいことば に書き換える
 npm run dev                      # http://localhost:8788
 ```
 
 ローカルのKVは `.wrangler/` の中に作られる。本番のデータには触らない。
-
-### GitHubから自動で出す場合
-
-`.github/workflows/deploy.yml` が入っている。GitHubのSecretsに
-`CLOUDFLARE_API_TOKEN`（Cloudflare Pages:Edit 権限）と `CLOUDFLARE_ACCOUNT_ID` を入れておくと、
-main への push で本番、他のブランチへの push でプレビューが出る。
-手元から `npm run deploy` するだけでもよく、その場合このファイルは消してよい。
 
 ## スポットを増やす・直す
 

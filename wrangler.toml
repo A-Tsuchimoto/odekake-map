@@ -1,18 +1,22 @@
+# このファイルが設定の正。Cloudflare のダッシュボードで同じ項目は編集できなくなる
+# （見えるが灰色になる）。バインディングを増やすときはここを直して push する。
+# あいことば（APP_TOKEN）だけはここに書けない。ダッシュボードの Secret で入れる。
 name = "odekake-map"
 compatibility_date = "2026-07-01"
 pages_build_output_dir = "public"
 
-# 本番（main ブランチのデプロイ）で使うKV。
-# npx wrangler kv namespace create RECORDS で出てきた id をここに書く。
+# 記録を入れるKV。ダッシュボードの Storage & Databases > KV で名前空間を作り、
+# 一覧に出る Namespace ID をそのまま貼る。
+# ここが未設定のままだとデプロイが通らない。
 [[kv_namespaces]]
 binding = "RECORDS"
 id = "PUT_YOUR_KV_NAMESPACE_ID_HERE"
 
-# プレビュー（main 以外のブランチのデプロイ）。ここを書かないとプレビューには
-# バインディングが付かず、/api/records が 500 を返す。
-# 本番の記録を触らせたくないので、別の名前空間を作って id を入れること。
-#   npx wrangler kv namespace create RECORDS_PREVIEW
-[env.preview]
-[[env.preview.kv_namespaces]]
-binding = "RECORDS"
-id = "PUT_YOUR_PREVIEW_KV_NAMESPACE_ID_HERE"
+# 本番ブランチ以外を push したときのプレビュー用。
+# 使うなら、もう1つKVを作って id を入れ、下の3行のコメントを外す。
+# 外さない場合、プレビューには RECORDS が付かないので /api/records が500を返す
+# （地図は見える。記録が端末内だけになる）。本番には影響しない。
+# [env.preview]
+# [[env.preview.kv_namespaces]]
+# binding = "RECORDS"
+# id = "PUT_YOUR_PREVIEW_KV_NAMESPACE_ID_HERE"

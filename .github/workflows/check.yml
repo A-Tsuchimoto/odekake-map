@@ -1,0 +1,18 @@
+name: check
+
+# デプロイは Cloudflare Pages の GitHub 連携が自動でやる。ここはデータの検査だけ。
+# spots.json の壊れ（ID重複・座標の抜け・未定義カテゴリ）を push の時点で見つける。
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm run check
