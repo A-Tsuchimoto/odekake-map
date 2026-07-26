@@ -294,6 +294,7 @@ width:34px;height:4px;border-radius:2px;background:var(--line);
     <div class="block">
       <p class="lbl">条件</p>
       <div class="row"><label for="car">車で<span class="val" id="carV"></span></label></div>
+      <!-- max と初期値はデータの最大値から JS が入れ直す -->
       <input type="range" id="car" min="15" max="100" step="5" value="100">
       <div class="row"><label for="train">電車・バスで<span class="val" id="trainV"></span></label></div>
       <input type="range" id="train" min="20" max="150" step="10" value="150">
@@ -488,7 +489,15 @@ function popup(s){
 
 /* filters */
 const el = id => document.getElementById(id);
-const state = {car:100, train:150, rainOnly:false, names:false};
+/* スライダーの上限はデータに合わせる。上限まで動かした状態が「こだわらない」。
+   遠いスポットを足したときに、そこだけ絞り込めない状態にならないように */
+const ceilTo = (v,n) => Math.ceil(v/n)*n;
+const maxOf = k => SPOTS.reduce((m,s)=> Math.max(m, s[k] || 0), 0);
+const CAR_MAX = Math.max(60, ceilTo(maxOf('c1'), 5));
+const TRAIN_MAX = Math.max(90, ceilTo(maxOf('t1'), 10));
+const state = {car:CAR_MAX, train:TRAIN_MAX, rainOnly:false, names:false};
+el('car').max = CAR_MAX;     el('car').value = CAR_MAX;
+el('train').max = TRAIN_MAX; el('train').value = TRAIN_MAX;
 el('total').textContent = regionSpots().length;   /* 地域を切り替えたら setRegion が入れ直す */
 
 /* ---- status chips ---- */
@@ -699,8 +708,8 @@ function bindRange(id, key, fmt){
   const upd = ()=>{ state[key] = +r.value; v.textContent = fmt(+r.value); render(); };
   r.addEventListener('input', upd); upd();
 }
-bindRange('car','car', v => v>=100 ? '時間はこだわらない' : v+'分以内');
-bindRange('train','train', v => v>=150 ? '時間はこだわらない' : v+'分以内');
+bindRange('car','car', v => v>=CAR_MAX ? '時間はこだわらない' : v+'分以内');
+bindRange('train','train', v => v>=TRAIN_MAX ? '時間はこだわらない' : v+'分以内');
 
 function bindToggle(id, fn, init){
   const b = el(id);
@@ -719,8 +728,8 @@ function visible(s){
   if(s.region !== region.id) return false;
   if(!active.has(s.cat)) return false;
   if(!activeStatus.has(statusOf(s))) return false;
-  if(state.car<100 && (!s.c1 || s.c1>state.car)) return false;
-  if(state.train<150 && (!s.t1 || s.t1>state.train)) return false;
+  if(state.car<CAR_MAX && (!s.c1 || s.c1>state.car)) return false;
+  if(state.train<TRAIN_MAX && (!s.t1 || s.t1>state.train)) return false;
   if(state.rainOnly && !['◎','○'].includes(s.rain)) return false;
   return true;
 }
