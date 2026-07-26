@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
-<title>高田駅発 家族お出かけマップ</title>
-<meta name="description" content="横浜市営地下鉄グリーンライン高田駅を起点に、家族で行けるお出かけスポットを地図で見て、行った記録を残すための個人用アプリ。">
+<title>家族お出かけマップ</title>
+<meta name="description" content="地域ごとの起点から、家族で行けるお出かけスポットを地図で見て、行った記録を残すための個人用アプリ。">
 <meta name="robots" content="noindex">
 <meta name="theme-color" content="#10222E">
 <meta name="mobile-web-app-capable" content="yes">
@@ -53,6 +53,16 @@ h1 small{display:block;font-size:11px;font-weight:500;color:var(--ink-45);letter
 font-size:12px;color:var(--ink-70);font-weight:700;
 font-variant-numeric:tabular-nums;white-space:nowrap;
 }
+/* 地域の切り替え。ここが一番上の区切りなので、パネルではなくヘッダーに置く */
+.regions{display:flex;gap:5px;pointer-events:auto;margin-left:auto}
+.regions button{
+font:inherit;font-size:12px;font-weight:700;letter-spacing:.04em;
+border:1px solid var(--line);background:#fff;color:var(--ink-45);
+border-radius:999px;padding:5px 13px;cursor:pointer;white-space:nowrap;
+transition:background .12s,color .12s,border-color .12s;
+}
+.regions button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff}
+.regions button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .count b{font-size:19px;color:var(--ink)}
 .panel{
 position:absolute;z-index:700;top:64px;left:18px;width:300px;
@@ -219,8 +229,11 @@ padding:7px 4px;border-radius:7px;border:1px solid var(--line);color:var(--ink);
 .links a:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .sheet-btn{display:none}
 @media (max-width:720px){
-header{padding:9px 14px}
-h1{font-size:15px}
+header{padding:9px 14px;gap:10px}
+/* 3つ並ぶので、タイトルは折り返さずに小さくする */
+h1{font-size:13.5px;white-space:nowrap}
+h1 small{display:none}
+.regions button{font-size:11.5px;padding:4px 11px}
 .panel{
 top:auto;bottom:0;left:0;right:0;width:auto;border-radius:16px 16px 0 0;
 max-height:72%;transform:translateY(calc(100% - 46px));transition:transform .22s ease;
@@ -244,7 +257,8 @@ width:34px;height:4px;border-radius:2px;background:var(--line);
 <div id="map"></div>
 
 <header>
-  <h1><small>TAKATA STA. — FAMILY OUTINGS</small>高田駅発 家族お出かけマップ</h1>
+  <h1><small>FAMILY OUTINGS</small>家族お出かけマップ</h1>
+  <div class="regions" id="regions"></div>
   <div class="count"><b id="shown">0</b> / <span id="total">0</span> 件</div>
 </header>
 
@@ -281,11 +295,11 @@ width:34px;height:4px;border-radius:2px;background:var(--line);
       <p class="lbl">条件</p>
       <div class="row"><label for="car">車で<span class="val" id="carV"></span></label></div>
       <input type="range" id="car" min="15" max="100" step="5" value="100">
-      <div class="row"><label for="train">電車で<span class="val" id="trainV"></span></label></div>
+      <div class="row"><label for="train">電車・バスで<span class="val" id="trainV"></span></label></div>
       <input type="range" id="train" min="20" max="150" step="10" value="150">
       <div class="row"><label for="rain">雨の日でも行ける（◎○）</label><button class="toggle" id="rain" aria-pressed="false"></button></div>
       <div class="row"><label for="names">施設名を地図に表示</label><button class="toggle" id="names" aria-pressed="false"></button></div>
-      <div class="row"><label for="rings">高田駅からの距離の輪</label><button class="toggle" id="rings" aria-pressed="true"></button></div>
+      <div class="row"><label for="rings" id="ringLbl">起点からの距離の輪</label><button class="toggle" id="rings" aria-pressed="true"></button></div>
     </div>
     <div class="block list">
       <p class="lbl list-head">近い順（車の最短時間）</p>
@@ -313,12 +327,19 @@ if(typeof L === 'undefined'){
 }
 
 const SPOTS = window.__SPOTS__ || [];
-const HOME = {lat:35.5496391, lng:139.620117, name:"高田駅"};
+
+/* 地域（関東・沖縄…）が一番上の区切り。スポットは必ずどれか1つに属する。
+   所要時間も距離の輪も、その地域の中心（起点）から見たもの。 */
+const REGIONS = window.__REGIONS__ || [];
+const FALLBACK = {id:'', name:'—', center:{name:'起点', lat:35.5496391, lng:139.620117}, rings:[10,20,30,40]};
+let region = REGIONS[0] || FALLBACK;
+let HOME = region.center;
+const regionSpots = () => SPOTS.filter(s => s.region === region.id);
 const COLORS = {
-  "科学館系":"#4338CA",
+  "科学館・博物館":"#4338CA",
   "水族館・水辺の生き物":"#0EA5B7",
-  "海・港・砂浜":"#1D7FD6",
-  "川・湖・ダム":"#16A085",
+  "海・砂浜・岬":"#1D7FD6",
+  "川・湖・滝・ダム":"#16A085",
   "森・里山":"#3E8E3E",
   "山・ハイキング":"#17624A",
   "大型公園":"#8FA31E",
@@ -366,20 +387,28 @@ tiles.on('tileerror', ()=>{
   }
 });
 
-/* distance rings from home */
+/* 起点と、そこからの距離の輪。地域を切り替えるたびに引き直す */
 const ringLayer = L.layerGroup().addTo(map);
-[10,20,30,40].forEach(km=>{
-  L.circle([HOME.lat,HOME.lng],{
-    radius:km*1000, color:'#10222E', weight:1, opacity:.28,
-    dashArray:'3 6', fill:km===10, fillColor:'#10222E', fillOpacity:.03, interactive:false
-  }).addTo(ringLayer);
-  L.marker([HOME.lat + km/111.32, HOME.lng],{opacity:0, interactive:false})
-    .bindTooltip(km+'km',{permanent:true,direction:'center',className:'ring-tip'}).addTo(ringLayer);
-});
-L.marker([HOME.lat,HOME.lng],{
-  icon:L.divIcon({className:'',html:'<div class="home"></div>',iconSize:[17,17],iconAnchor:[8.5,8.5]}),
-  zIndexOffset:1000
-}).bindTooltip('高田駅（起点）',{permanent:true,direction:'right',offset:[10,0],className:'nm-tip'}).addTo(map);
+let homeMarker = null;
+function drawHome(){
+  ringLayer.clearLayers();
+  const rings = region.rings || [10,20,30,40];
+  rings.forEach(km=>{
+    L.circle([HOME.lat,HOME.lng],{
+      radius:km*1000, color:'#10222E', weight:1, opacity:.28,
+      dashArray:'3 6', fill:km===rings[0], fillColor:'#10222E', fillOpacity:.03, interactive:false
+    }).addTo(ringLayer);
+    L.marker([HOME.lat + km/111.32, HOME.lng],{opacity:0, interactive:false})
+      .bindTooltip(km+'km',{permanent:true,direction:'center',className:'ring-tip'}).addTo(ringLayer);
+  });
+  if(homeMarker) map.removeLayer(homeMarker);
+  homeMarker = L.marker([HOME.lat,HOME.lng],{
+    icon:L.divIcon({className:'',html:'<div class="home"></div>',iconSize:[17,17],iconAnchor:[8.5,8.5]}),
+    zIndexOffset:1000
+  }).bindTooltip(HOME.name+'（起点）',{permanent:true,direction:'right',offset:[10,0],className:'nm-tip'})
+    .addTo(map);
+}
+drawHome();
 
 /* markers */
 const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -415,7 +444,7 @@ function popup(s){
   const sv = statusOf(s);
   const f = [];
   if(s.c1) f.push(['車', `${s.c1}–${s.c2}分`]);
-  if(s.t1) f.push(['電車', `${s.t1}–${s.t2}分`]);
+  if(s.t1) f.push(['電車・バス', `${s.t1}–${s.t2}分`]);
   if(s.rain) f.push(['雨の日', s.rain]);
   if(s.age) f.push(['年齢', s.age]);
   if(s.rate) f.push(['評価', `★ ${s.rate}`]);
@@ -460,7 +489,7 @@ function popup(s){
 /* filters */
 const el = id => document.getElementById(id);
 const state = {car:100, train:150, rainOnly:false, names:false};
-el('total').textContent = SPOTS.length;
+el('total').textContent = regionSpots().length;   /* 地域を切り替えたら setRegion が入れ直す */
 
 /* ---- status chips ---- */
 el('stats').innerHTML = SORDER.map(k=>{
@@ -646,11 +675,10 @@ el('connect').onclick = async ()=>{
   }
 })();
 
-el('cats').innerHTML = ORDER.map(c=>{
-  const n = SPOTS.filter(s=>s.cat===c).length;
-  return `<button class="chip" data-cat="${c}" aria-pressed="true" style="--c:${COLORS[c]};color:${COLORS[c]}">
-    <span class="dot"></span>${c}<span class="n">${n}</span></button>`;
-}).join('');
+/* 件数は地域ごとに変わるので、中身だけ render() で入れ直す（押した状態は保つ） */
+el('cats').innerHTML = ORDER.map(c=>
+  `<button class="chip" data-cat="${c}" aria-pressed="true" style="--c:${COLORS[c]};color:${COLORS[c]}">
+    <span class="dot"></span>${c}<span class="n" data-cnt-cat="${c}">0</span></button>`).join('');
 el('cats').addEventListener('click',e=>{
   const b = e.target.closest('.chip'); if(!b) return;
   const c = b.dataset.cat, on = b.getAttribute('aria-pressed')==='true';
@@ -688,6 +716,7 @@ bindToggle('rings', on=> on ? ringLayer.addTo(map) : map.removeLayer(ringLayer))
 
 /* render */
 function visible(s){
+  if(s.region !== region.id) return false;
   if(!active.has(s.cat)) return false;
   if(!activeStatus.has(statusOf(s))) return false;
   if(state.car<100 && (!s.c1 || s.c1>state.car)) return false;
@@ -714,13 +743,19 @@ function render(){
   });
   el('shown').textContent = vis.length;
 
+  /* 件数・状況・進み具合は、今見ている地域の中だけで数える */
+  const mine = regionSpots();
   const cnt = {}; SORDER.forEach(k => cnt[k] = 0);
-  SPOTS.forEach(s => cnt[statusOf(s)]++);
+  mine.forEach(s => cnt[statusOf(s)]++);
   SORDER.forEach(k=>{
     const n = el('stats').querySelector(`[data-cnt="${k}"]`);
     if(n) n.textContent = cnt[k];
   });
-  el('bar').style.width = (SPOTS.length ? cnt['訪問済み'] / SPOTS.length * 100 : 0) + '%';
+  ORDER.forEach(c=>{
+    const n = el('cats').querySelector(`[data-cnt-cat="${c}"]`);
+    if(n) n.textContent = mine.filter(s => s.cat === c).length;
+  });
+  el('bar').style.width = (mine.length ? cnt['訪問済み'] / mine.length * 100 : 0) + '%';
 
   el('list').innerHTML = vis.length ? vis.map(s=>`
     <button class="item" data-id="${s.id}" style="--c:${s.color}">
@@ -735,9 +770,14 @@ function render(){
 el('list').addEventListener('click',e=>{
   const b = e.target.closest('.item'); if(!b) return;
   const s = SPOTS.find(x=>x.id===b.dataset.id);
-  map.flyTo([s.lat,s.lng], Math.max(map.getZoom(),13), {duration:.6});
-  s.marker.openPopup();
   if(window.innerWidth<=720) el('panel').classList.remove('open');
+  map.flyTo([s.lat,s.lng], Math.max(map.getZoom(),13), {duration:.6});
+  /* 移動しながら開くと、ポップアップの自動スクロールが移動前の位置で計算されて
+     上端がヘッダーに隠れる。移動が終わってから開く（念のため時間でも保険をかける） */
+  let opened = false;
+  const open = ()=>{ if(opened) return; opened = true; s.marker.openPopup(); };
+  map.once('moveend', open);
+  setTimeout(open, 800);
 });
 
 /* ---- editing inside the popup ---- */
@@ -807,15 +847,53 @@ el('sheetBtn').addEventListener('click',()=>{
   el('sheetBtn').textContent = open ? '閉じる' : '絞り込みと一覧';
 });
 
-render();
+/* ---- 地域の切り替え ---- */
+const RKEY = 'outing-region-v1';
+el('regions').innerHTML = REGIONS.map(r=>
+  `<button data-region="${r.id}" aria-pressed="false">${esc(r.name)}</button>`).join('');
+el('regions').addEventListener('click', e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  if(b.dataset.region === region.id) return;
+  setRegion(b.dataset.region, true);
+  store.set(RKEY, region.id);
+});
+
+function fitRegion(){
+  const mine = regionSpots();
+  if(mine.length){
+    map.fitBounds(L.latLngBounds(mine.map(s=>[s.lat,s.lng])).extend([HOME.lat,HOME.lng]),
+      {padding:[60,60], paddingTopLeft:[window.innerWidth>720?330:40, 80]});
+  } else {
+    map.setView([HOME.lat,HOME.lng], 12);
+  }
+}
+function setRegion(id, moveMap){
+  const found = REGIONS.find(r => r.id === id);
+  if(found) region = found;
+  HOME = region.center;
+  el('regions').querySelectorAll('button').forEach(b=>
+    b.setAttribute('aria-pressed', String(b.dataset.region === region.id)));
+  el('ringLbl').textContent = HOME.name + 'からの距離の輪';
+  el('total').textContent = regionSpots().length;
+  drawHome();
+  render();
+  if(moveMap) fitRegion();
+}
+
+setRegion(region.id, false);
 if(SPOTS.length){
-  map.fitBounds(L.latLngBounds(SPOTS.map(s=>[s.lat,s.lng])).extend([HOME.lat,HOME.lng]),
-    {padding:[60,60], paddingTopLeft:[window.innerWidth>720?330:40, 80]});
+  fitRegion();
 } else {
-  /* spots.js が読めなかったとき。地図だけでも高田駅を出しておく */
+  /* spots.js が読めなかったとき。地図だけでも起点を出しておく */
   map.setView([HOME.lat,HOME.lng], 12);
   msg('スポットのデータを読み込めませんでした。通信状態を確かめて、開き直してください。','err');
 }
+
+/* 前回見ていた地域に戻す */
+(async ()=>{
+  const saved = await store.get(RKEY);
+  if(saved && saved !== region.id && REGIONS.some(r => r.id === saved)) setRegion(saved, true);
+})();
 </script>
 <script>
 if('serviceWorker' in navigator){

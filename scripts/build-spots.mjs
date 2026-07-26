@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /**
- * data/spots.json -> public/spots.js を作り直す。
+ * data/regions.json + data/spots.json -> public/spots.js を作り直す。
  *
  *   node scripts/build-spots.mjs           作り直す
  *   node scripts/build-spots.mjs --check   作り直さずに、中身の妥当性と
  *                                          spots.js が最新かどうかだけ見る（CI用）
  *
  * ここで弾いているのは、デプロイしてから気づくと面倒なものだけ。
- * IDの重複、緯度経度の抜け・関東圏外、index.html に色の定義がないカテゴリ、
- * 同じ座標に2件（ピンが重なってタップできなくなる）。
+ * IDの重複、緯度経度の抜け、所属地域の間違い（起点から離れすぎ）、
+ * index.html に色の定義がないカテゴリ、同じ座標に2件（ピンが重なってタップできない）。
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -16,12 +16,20 @@ import { dirname, join } from "node:path";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SRC = join(root, "data", "spots.json");
+const REGION_SRC = join(root, "data", "regions.json");
 const OUT = join(root, "public", "spots.js");
 const HTML = join(root, "public", "index.html");
 
 const RAIN = ["◎", "○", "△", "×"];
-/** 高田駅からの現実的な行動範囲。ざっくり関東 */
-const BOUNDS = { lat: [34.5, 37.2], lng: [138.2, 141.0] };
+/** 起点から日帰りで動く範囲。これを超える場合はたいてい region の付け間違い */
+const MAX_KM = 250;
+
+/** 緯度経度のざっくり距離(km)。地域の取り違えが分かれば十分なので簡易式で足りる */
+function distKm(lat, lng, c) {
+  const dx = (lng - c.lng) * Math.cos((lat * Math.PI) / 180) * 111.32;
+  const dy = (lat - c.lat) * 111.32;
+  return Math.hypot(dx, dy);
+}
 
 const check = process.argv.includes("--check");
 const problems = [];
@@ -31,6 +39,32 @@ const spots = JSON.parse(readFileSync(SRC, "utf8"));
 if (!Array.isArray(spots)) {
   console.error("data/spots.json は配列であること");
   process.exit(1);
+}
+const regions = JSON.parse(readFileSync(REGION_SRC, "utf8"));
+if (!Array.isArray(regions) || !regions.length) {
+  console.error("data/regions.json は1件以上の配列であること");
+  process.exit(1);
+}
+
+/** 地域そのものの検査。中心がずれると所要時間も距離の輪も全部ずれる */
+const byRegion = new Map();
+for (const r of regions) {
+  const at = r.id || r.name || "(idなし)";
+  if (!r.id) fail(`${at}: id がない`);
+  else if (byRegion.has(r.id)) fail(`${r.id}: id が重複している`);
+  else byRegion.set(r.id, r);
+  if (!r.name) fail(`${at}: name がない`);
+  const c = r.center;
+  if (!c || typeof c.lat !== "number" || typeof c.lng !== "number") {
+    fail(`${at}: center の lat/lng が数値でない。ここが起点になる`);
+  } else if (!c.name) {
+    fail(`${at}: center.name がない（「◯◯からの距離の輪」に出す名前）`);
+  }
+  if (!Array.isArray(r.rings) || !r.rings.length || r.rings.some((n) => typeof n !== "number" || n <= 0)) {
+    fail(`${at}: rings は正の数の配列であること`);
+  } else if (r.rings.some((n, i) => i && n <= r.rings[i - 1])) {
+    fail(`${at}: rings は小さい順に並べること`);
+  }
 }
 
 /** index.html の COLORS に載っているカテゴリだけが正。載っていないと灰色ピンになる */
@@ -52,14 +86,20 @@ for (const s of spots) {
   else seenId.add(s.id);
 
   if (!s.name) fail(`${at}: name がない`);
+  if (!s.region) fail(`${at}: region がない。どの地域のスポットか決めること`);
+  else if (!byRegion.has(s.region)) fail(`${at}: region「${s.region}」が data/regions.json にない`);
   if (!s.cat) fail(`${at}: cat がない`);
   else if (cats && !cats.has(s.cat)) fail(`${at}: カテゴリ「${s.cat}」は index.html の COLORS にない`);
 
   if (typeof s.lat !== "number" || typeof s.lng !== "number") {
     fail(`${at}: lat/lng が数値でない`);
   } else {
-    if (s.lat < BOUNDS.lat[0] || s.lat > BOUNDS.lat[1] || s.lng < BOUNDS.lng[0] || s.lng > BOUNDS.lng[1]) {
-      fail(`${at}: 座標が想定範囲外 (${s.lat}, ${s.lng})`);
+    const r = byRegion.get(s.region);
+    if (r && r.center) {
+      const d = distKm(s.lat, s.lng, r.center);
+      if (d > MAX_KM) {
+        fail(`${at}: ${r.name}の起点から ${Math.round(d)}km。region の付け間違いか座標の誤り`);
+      }
     }
     const key = `${s.lat},${s.lng}`;
     if (seenPos.has(key)) fail(`${at}: ${seenPos.get(key)} と座標が同じ。50mほどずらすこと`);
@@ -74,7 +114,8 @@ for (const s of spots) {
   if (s.c1 != null && s.c2 != null && s.c1 > s.c2) fail(`${at}: c1 が c2 より大きい`);
 }
 
-const js = `window.__SPOTS__=${JSON.stringify(spots)};\n`;
+const js =
+  `window.__REGIONS__=${JSON.stringify(regions)};\n` + `window.__SPOTS__=${JSON.stringify(spots)};\n`;
 
 if (problems.length) {
   console.error(`spots データに ${problems.length} 件の問題:`);
@@ -88,8 +129,9 @@ if (check) {
     console.error("public/spots.js が data/spots.json と食い違っている。npm run build:spots を実行すること");
     process.exit(1);
   }
-  console.log(`OK: スポット ${spots.length} 件、spots.js も最新`);
+  console.log(`OK: ${regions.length} 地域 / スポット ${spots.length} 件、spots.js も最新`);
 } else {
   writeFileSync(OUT, js);
-  console.log(`public/spots.js を書き出した（スポット ${spots.length} 件）`);
+  const per = regions.map((r) => `${r.name} ${spots.filter((s) => s.region === r.id).length}`).join(" / ");
+  console.log(`public/spots.js を書き出した（スポット ${spots.length} 件: ${per}）`);
 }
