@@ -31,17 +31,27 @@ const valueOf = (key) => {
 
 const quoted = (v) => /^"[^"]*"$/.test(v);
 
-for (const key of ["name", "compatibility_date", "pages_build_output_dir"]) {
+for (const key of ["name", "main", "compatibility_date", "directory", "binding"]) {
   const v = valueOf(key);
   if (!v) fail(`${key} がない`);
   else if (!quoted(v.raw)) fail(`${v.line}行目: ${key} は引用符で囲むこと（今: ${v.raw}）`);
 }
 
-const outDir = valueOf("pages_build_output_dir");
-if (outDir && quoted(outDir.raw)) {
-  const d = outDir.raw.slice(1, -1);
-  if (!existsSync(join(root, d))) fail(`pages_build_output_dir の "${d}" が無い`);
-  if (!existsSync(join(root, d, "index.html"))) fail(`"${d}/index.html" が無い。公開しても何も出ない`);
+/* Pages用の書き方が残っていると wrangler deploy が入口を見つけられない */
+if (/^\s*pages_build_output_dir/m.test(raw.replace(/^\s*#.*$/gm, ""))) {
+  fail("pages_build_output_dir が残っている。Workersでは main と [assets] を使う");
+}
+
+const entry = valueOf("main");
+if (entry && quoted(entry.raw) && !existsSync(join(root, entry.raw.slice(1, -1)))) {
+  fail(`main の "${entry.raw.slice(1, -1)}" が無い`);
+}
+
+const dir = valueOf("directory");
+if (dir && quoted(dir.raw)) {
+  const d = dir.raw.slice(1, -1);
+  if (!existsSync(join(root, d))) fail(`[assets] の directory "${d}" が無い`);
+  else if (!existsSync(join(root, d, "index.html"))) fail(`"${d}/index.html" が無い。公開しても何も出ない`);
 }
 
 /** KVバインディング。id は32桁の16進を引用符で囲んだもの */
@@ -61,9 +71,9 @@ for (const [n, line] of lines) {
 }
 if (!kvCount) fail("[[kv_namespaces]] がない。記録APIがKVを使えない");
 
-/** functions/ がないと /api/records が404になる */
-if (!existsSync(join(root, "functions", "api", "records.js"))) {
-  fail("functions/api/records.js が無い。記録の保存先が消える");
+/** 記録APIの本体 */
+if (!existsSync(join(root, "src", "records.js"))) {
+  fail("src/records.js が無い。記録の保存先が消える");
 }
 
 if (problems.length) {

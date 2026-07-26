@@ -27,7 +27,7 @@ function sameToken(a, b) {
   return diff === 0;
 }
 
-export async function onRequest({ request, env }) {
+export async function handleRecords(request, env) {
   if (!env.APP_TOKEN) {
     return json({ error: "APP_TOKEN が未設定です" }, 500);
   }

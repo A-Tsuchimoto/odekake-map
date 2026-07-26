@@ -3,56 +3,61 @@
 横浜市営地下鉄グリーンライン高田駅を起点に、家族で行ける128スポットを地図で見て、
 行ったら記録を残すための個人用ウェブアプリ。利用者は本人ひとり。スマホからの利用が主。
 
-Cloudflare Pages で公開する前提。ビルドは要らないので、リポジトリの中身がそのまま公開物になる。
+Cloudflare Workers（静的アセット + Worker）で公開する前提。
+バンドルもビルドも要らず、`public/` の中身がそのまま配られる。
 
 - 地図は Leaflet + CARTO のタイル。フレームワークなし
 - スポット128件は `public/spots.js`（`window.__SPOTS__`）に静的に持つ
-- 訪問記録は Pages Functions 経由で Workers KV に保存する
+- 訪問記録は Worker 経由で Workers KV に保存する
 - サービスワーカーで、アプリ本体と地図タイルをキャッシュしてオフラインでも開ける
 - ホーム画面に追加すればアプリのように開く（PWA）
 
 ## 構成
 
 ```
-public/                   ← ここがそのまま公開される（pages_build_output_dir）
+public/                   ← 静的アセット。ここがそのまま配られる
   index.html              地図本体。CSS・JSすべて内包。依存はLeafletのCDNのみ
   spots.js                スポット128件のデータ。data/spots.json から生成する
   sw.js                   オフライン用キャッシュ
   _headers                セキュリティヘッダとキャッシュ指定
   manifest.webmanifest    ホーム画面追加用
   icon-192.png / icon-512.png
-functions/
-  api/records.js          GET/POST /api/records。X-Token で認証し、KVに読み書き
+src/
+  index.js                Workerの入口。/api/records 以外は静的アセットに渡す
+  records.js              GET/POST /api/records。X-Token で認証し、KVに読み書き
 data/
   spots.json              スポットの元データ。ここを直して npm run build:spots
 scripts/
   build-spots.mjs         spots.json → spots.js の生成と検査
-wrangler.toml             Pagesの設定とKVバインディング（設定の正はこれ）
-.github/workflows/check.yml    push時に spots データを検査する（デプロイはCloudflare側）
+  check-config.mjs        wrangler.toml の検査
+wrangler.toml             Workerの設定とKVバインディング（設定の正はこれ）
+.github/workflows/check.yml    push時にデータと設定を検査する（デプロイはCloudflare側）
 ```
 
 ## 公開の手順
 
-GitHub連携（Workers & Pages > Create > Pages > Connect to Git）で運用している。
-push すると Cloudflare 側が勝手にビルドして出す。CLIは要らない。
+GitHub連携で運用している（**Workers & Pages > Create > Workers > Import a repository**）。
+push すると Cloudflare 側が `npx wrangler deploy` を走らせて出す。手元のCLIは要らない。
 
-設定の正は `wrangler.toml`。ダッシュボードでは同じ項目が灰色になって編集できないので、
-バインディングを変えるときはこのファイルを直して push する。
+**Pagesではなく Workers として作ること。** Pages用の設定（`pages_build_output_dir`）で
+Workers のビルドに流すと `Missing entry-point to Worker script` で必ず落ちる。
+
+設定の正は `wrangler.toml`。バインディングを変えるときはこのファイルを直して push する。
 例外は**あいことば（APP_TOKEN）**で、これはファイルに書けないのでダッシュボードで入れる。
 
 初回にやること。
 
-1. **KVを作る** — ダッシュボード左 **Storage & Databases > KV**（Workers KV の画面）で
-   **Create instance**。名前は `odekake-map-records`。作った行に出る
-   **Namespace ID**（32桁の英数字）をコピーする
-2. **IDを貼る** — `wrangler.toml` の `PUT_YOUR_KV_NAMESPACE_ID_HERE` を差し替えて push。
-   GitHubのWeb編集でもよい。ここが未設定だとデプロイが失敗する
-3. **あいことばを入れる** — Pagesプロジェクト > **Settings > Variables and Secrets > Add**。
-   Type は **Secret**、名前は `APP_TOKEN`、値は好きな文字列。Production に入れる
-4. **もう一度デプロイする** — シークレットもバインディングも、**入れただけでは効かない**。
-   Deployments の最新デプロイの **⋯ > Retry deployment**（または空push）で作り直す
+1. **KVを作る** — ダッシュボード左 **Storage & Databases > KV** で **Create instance**。
+   名前は `odekake-map-records`。作った行に出る **Namespace ID**（32桁の英数字）をコピー
+2. **IDを貼る** — `wrangler.toml` の `id = "..."` を差し替えて push。GitHubのWeb編集でよい。
+   **必ず引用符で囲むこと。** 裸で書くとTOMLが壊れてビルドが落ちる
+3. **あいことばを入れる** — Worker > **Settings > Variables and Secrets > Add** で
+   Type は **Secret**、名前 `APP_TOKEN`、値は好きな文字列
+4. **もう一度デプロイする** — シークレットは**入れただけでは既存のデプロイに効かない**。
+   Deployments から最新をやり直すか、空pushする
 
-`https://odekake-map.pages.dev` で開く。スマホで開いて「ホーム画面に追加」。
+`https://odekake-map.<自分のサブドメイン>.workers.dev` で開く。
+スマホで開いて「ホーム画面に追加」。
 
 初回だけ、パネルの「あいことば」に APP_TOKEN と同じ文字列を入れて「つなぐ」を押す。
 以後その端末には保存され、記録は自動でKVに書かれる。
@@ -62,24 +67,25 @@ push すると Cloudflare 側が勝手にビルドして出す。CLIは要らな
 
 ### デプロイが止まるとき
 
-Pagesプロジェクト > **Deployments** > 失敗したデプロイをクリックすると、
-どこで止まったかがログで分かる。よくあるのは次の4つ。
+Worker > **Deployments**（または Builds）で失敗したものを開くとログが読める。
+実際に踏んだものを含めて、よくあるのは次の4つ。
 
 | ログに出るもの | 原因 | 直し方 |
 |---|---|---|
-| `Unable to parse` / TOML の構文エラー | `wrangler.toml` の書き方。IDのクオート忘れが多い | `id = "..."` と**必ず引用符で囲む**。数字始まりの32桁なので裸で書くと壊れる |
-| `project name` が合わない旨 | `wrangler.toml` の `name` と、実際のPagesプロジェクト名が違う | プロジェクト名（`*.pages.dev` の左側）に `name =` を合わせる |
-| `KV namespace ... not found` | IDが違う／別アカウントの名前空間 | Storage & Databases > KV でIDを取り直して貼る |
-| `npm install` あたりで失敗 | ビルドイメージのNodeが古い | `.node-version`（このリポジトリに入っている）が効く。効かなければ Settings > Variables に `NODE_VERSION=22` |
+| `Missing entry-point to Worker script` | Pages用の設定のままWorkersにデプロイした | `wrangler.toml` に `main` と `[assets]` を書く（今はそうなっている） |
+| `Unable to parse` / TOMLの構文エラー | KVのIDのクオート忘れ | `id = "..."` と引用符で囲む。数字始まりの32桁なので裸で書くと壊れる |
+| Worker名が合わない旨 | `wrangler.toml` の `name` と実際のWorker名が違う | ダッシュボードのWorker名に `name =` を合わせる |
+| `npm install` あたりで失敗 | ビルドイメージのNodeが古い | `.node-version`（同梱）が効く。効かなければ変数に `NODE_VERSION=22` |
 
-ビルド設定そのものは **Settings > Builds** で、Build command は**空**、Root directory は `/`。
-Build output directory は `wrangler.toml` の `pages_build_output_dir` が優先されるので触らなくてよい。
+`npm run check` が push 前に同じ壊れ方を検出する。CIでも毎回走っている。
+
+ビルド設定は **Settings > Build**。Build command は**空**、Deploy command は
+`npx wrangler deploy`、Root directory は `/`。
 
 ### プレビュー（本番ブランチ以外）
 
-別ブランチを push するとプレビューURLが出る。プレビューにKVを効かせたいときは、
-KVをもう1つ作って `wrangler.toml` の `[env.preview]` のコメントを外す。
-本番の記録を触らせないよう、名前空間は必ず分けること。
+別ブランチを push するとプレビューURLが出る。バインディングは本番と同じものを使うので、
+**プレビューから書いた記録も本番のKVに入る**。試し書きするときは注意。
 
 ### 手元で動かす
 

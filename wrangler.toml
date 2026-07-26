@@ -1,22 +1,21 @@
-# このファイルが設定の正。Cloudflare のダッシュボードで同じ項目は編集できなくなる
-# （見えるが灰色になる）。バインディングを増やすときはここを直して push する。
+# このファイルが設定の正。ダッシュボードで同じ項目は編集できない。
+# バインディングを増やすときはここを直して push する。
 # あいことば（APP_TOKEN）だけはここに書けない。ダッシュボードの Secret で入れる。
+#
+# Pages ではなく Workers（静的アセット + Worker）として動かしている。
+# name は実際のWorker名と一致していること。ずれるとデプロイが別物を作る。
 name = "odekake-map"
+main = "src/index.js"
 compatibility_date = "2026-07-01"
-pages_build_output_dir = "public"
+
+# public/ の中身をそのまま配る。該当ファイルがある要求はWorkerまで来ない。
+# public/_headers もこの仕組みが読む。
+[assets]
+directory = "./public"
+binding = "ASSETS"
 
 # 記録を入れるKV。ダッシュボードの Storage & Databases > KV で名前空間を作り、
-# 一覧に出る Namespace ID をそのまま貼る。
-# ここが未設定のままだとデプロイが通らない。
+# 一覧に出る Namespace ID を引用符付きで貼る（裸で書くとTOMLが壊れる）。
 [[kv_namespaces]]
 binding = "RECORDS"
 id = "1856af44c8e2454d8bc5b73fb0d86799"
-
-# 本番ブランチ以外を push したときのプレビュー用。
-# 使うなら、もう1つKVを作って id を入れ、下の3行のコメントを外す。
-# 外さない場合、プレビューには RECORDS が付かないので /api/records が500を返す
-# （地図は見える。記録が端末内だけになる）。本番には影響しない。
-# [env.preview]
-# [[env.preview.kv_namespaces]]
-# binding = "RECORDS"
-# id = "PUT_YOUR_PREVIEW_KV_NAMESPACE_ID_HERE"

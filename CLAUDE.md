@@ -1,11 +1,13 @@
 # CLAUDE.md
 
-高田駅発 家族お出かけマップ。個人用の1枚もののウェブアプリで、Cloudflare Pages に置く。
+高田駅発 家族お出かけマップ。個人用の1枚もののウェブアプリで、Cloudflare Workers に置く
+（静的アセット + `src/index.js`。Pages ではない）。
 何をするものか・どう公開するかは README.md に書いてある。ここは作業するときの決まりごとだけ。
 
 ## 作りの前提
 
-- **ビルド工程はない**。`public/` の中身がそのまま公開される。バンドラもフレームワークも入れない
+- **ビルド工程はない**。`public/` の中身がそのまま配られる。バンドラもフレームワークも入れない
+- **記録APIは `src/records.js`**。`src/index.js` が `/api/records` だけを拾い、残りは静的アセットに渡す
 - `public/index.html` に CSS も JS も全部入っている。ファイルを分けるより、この1枚を保つ方を優先する
 - 外部依存は Leaflet(cdnjs)、Googleフォント、CARTOのタイルだけ。増やすときは
   `public/_headers` の CSP と `public/sw.js` のキャッシュ対象も一緒に直す。
@@ -14,9 +16,12 @@
 ## 直したら必ずやること
 
 ```bash
-npm run check    # data/spots.json の検査 + spots.js が最新か
+npm run check    # spots.json の検査 + spots.js が最新か + wrangler.toml の書式
 npm run dev      # http://localhost:8788 で実際に開いて確かめる
 ```
+
+`wrangler.toml` を直すときは `main` と `[assets]` を消さないこと。
+Pages用の `pages_build_output_dir` を書くとデプロイが入口を見つけられずに落ちる。
 
 `data/spots.json` を直したときは `npm run build:spots`。`public/spots.js` を手で編集しない。
 
