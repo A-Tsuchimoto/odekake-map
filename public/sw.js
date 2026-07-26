@@ -7,7 +7,9 @@
 
    タイルは <img> から no-cors で取られるので response.ok が false（type:'opaque'）になる。
    ここを見落とすと1枚もキャッシュされず、圏外で真っ白な地図になる。 */
-const SHELL_CACHE = 'odekake-map-v2';
+/* v2 のキャッシュには Leaflet が入っていない（CSPのconnect-srcで弾かれていた）。
+   名前を変えて作り直させる。 */
+const SHELL_CACHE = 'odekake-map-v3';
 const TILE_CACHE = 'odekake-tiles-v1';
 const TILE_MAX = 600;
 

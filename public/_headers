@@ -3,12 +3,17 @@
 # CSP は外部の読み込み先を Leaflet(cdnjs)・Googleフォント・CARTOのタイルだけに絞ってある。
 # index.html は CSS も JS も中に書いてあるので 'unsafe-inline' は外せない。
 # 読み込み先を増やしたらここも足すこと。増やし忘れると本番でだけ黙って動かなくなる。
+#
+# connect-src には script-src / img-src と同じ外部ホストを必ず入れること。
+# このCSPは /sw.js にも付き、サービスワーカーの中の fetch() は connect-src で判定される。
+# 'self' だけにすると、サービスワーカーが効き始めた2回目の読み込みから
+# Leaflet もタイルも取れなくなり、地図が出ない（1回目は動くので気づきにくい）。
 /*
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: geolocation=(), camera=(), microphone=(), interest-cohort=()
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://cdnjs.cloudflare.com; connect-src 'self'; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://cdnjs.cloudflare.com; connect-src 'self' https://cdnjs.cloudflare.com https://fonts.googleapis.com https://fonts.gstatic.com https://*.basemaps.cartocdn.com; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
 
 # 中身が変わるものは毎回見に行かせる。デプロイしても古い画面が出続けるのを防ぐ
 /

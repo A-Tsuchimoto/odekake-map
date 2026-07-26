@@ -12,6 +12,9 @@
 - 外部依存は Leaflet(cdnjs)、Googleフォント、CARTOのタイルだけ。増やすときは
   `public/_headers` の CSP と `public/sw.js` のキャッシュ対象も一緒に直す。
   どちらかを忘れると、手元では動いて本番でだけ止まる
+- **CSPの `connect-src` には、`script-src`／`img-src` と同じ外部ホストを必ず入れる**。
+  サービスワーカーが全リクエストを取り次ぐので、SW内の `fetch()` は `connect-src` で判定される。
+  入れ忘れると1回目は動いて、2回目の読み込みから地図が消える。`npm run check` が見ている
 
 ## 直したら必ずやること
 

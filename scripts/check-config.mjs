@@ -76,10 +76,42 @@ if (!existsSync(join(root, "src", "records.js"))) {
   fail("src/records.js が無い。記録の保存先が消える");
 }
 
+/* public/_headers の CSP。
+   サービスワーカーが全リクエストを取り次ぐので、SW内の fetch() は connect-src で判定される。
+   script-src などに書いた外部ホストを connect-src に入れ忘れると、
+   1回目は動いて2回目の読み込みから地図が消える。実際にこれで壊した。 */
+const headersPath = join(root, "public", "_headers");
+if (!existsSync(headersPath)) {
+  fail("public/_headers が無い。CSPとキャッシュ指定が消える");
+} else {
+  const csp = readFileSync(headersPath, "utf8")
+    .split("\n")
+    .filter((l) => !l.trim().startsWith("#"))
+    .find((l) => /content-security-policy:/i.test(l));
+  if (!csp) {
+    fail("_headers に Content-Security-Policy がない");
+  } else {
+    const directive = (name) => {
+      const m = csp.match(new RegExp(`(?:^|;)\\s*${name}\\s+([^;]+)`, "i"));
+      return m ? m[1].trim().split(/\s+/) : [];
+    };
+    const hosts = (list) => list.filter((v) => v.startsWith("https://"));
+    const connect = directive("connect-src");
+    for (const d of ["script-src", "style-src", "img-src", "font-src"]) {
+      for (const host of hosts(directive(d))) {
+        if (!connect.includes(host)) {
+          fail(`CSP: ${d} の ${host} が connect-src にない。サービスワーカー経由で取れなくなる`);
+        }
+      }
+    }
+    if (!connect.includes("'self'")) fail("CSP: connect-src に 'self' がない。記録APIを呼べない");
+  }
+}
+
 if (problems.length) {
-  console.error(`wrangler.toml に ${problems.length} 件の問題:`);
+  console.error(`設定に ${problems.length} 件の問題:`);
   for (const p of problems) console.error("  - " + p);
-  console.error("\nこのままpushするとCloudflare側のビルドが失敗する。");
+  console.error("\nこのままpushすると、デプロイが失敗するか、本番でだけ動かなくなる。");
   process.exit(1);
 }
-console.log("OK: wrangler.toml も問題なし");
+console.log("OK: wrangler.toml と _headers も問題なし");

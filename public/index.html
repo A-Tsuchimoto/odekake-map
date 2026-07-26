@@ -291,6 +291,21 @@ width:34px;height:4px;border-radius:2px;background:var(--line);
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="spots.js"></script>
 <script>
+/* Leaflet(CDN)が来ていないと、この先の L.map() で落ちて画面が真っ白のまま止まる。
+   何が起きたか出してから止める。ここで throw するとこのスクリプトだけが終わる。 */
+if(typeof L === 'undefined'){
+  const m = document.getElementById('msg');
+  if(m){
+    m.textContent = '地図の部品を読み込めませんでした。通信状態を確かめて、開き直してください。';
+    m.className = 'status-msg err';
+  }
+  document.getElementById('map').innerHTML =
+    '<p style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;' +
+    'margin:0;padding:24px;text-align:center;font-size:13px;line-height:1.8;color:rgba(16,34,46,.45)">' +
+    '地図を読み込めませんでした。<br>電波の届くところで開き直してください。</p>';
+  throw new Error('Leaflet unavailable');
+}
+
 const SPOTS = window.__SPOTS__ || [];
 const HOME = {lat:35.5496391, lng:139.620117, name:"高田駅"};
 const COLORS = {
