@@ -191,8 +191,14 @@ font-size:10px;font-weight:700;letter-spacing:.1em;padding:0;
 }
 .leaflet-tooltip.ring-tip::before{display:none}
 .leaflet-popup-content-wrapper{border-radius:12px;box-shadow:var(--shadow);padding:0;overflow:hidden}
-.leaflet-popup-content{margin:0;width:264px!important;line-height:1.5}
-.pop-top{padding:12px 14px 10px;color:#fff}
+/* 中身が画面に収まらないときはポップアップの中でスクロールさせる。
+   overscroll-behavior で、端まで行っても地図側が動かないようにしておく */
+.leaflet-popup-content{
+margin:0;width:264px!important;line-height:1.5;
+max-height:min(68vh,520px);overflow-y:auto;overscroll-behavior:contain;
+-webkit-overflow-scrolling:touch;
+}
+.pop-top{padding:12px 14px 10px;color:#fff;position:sticky;top:0;z-index:1}
 .pop-cat{font-size:9.5px;letter-spacing:.13em;font-weight:700;opacity:.85}
 .pop-nm{font-size:15px;font-weight:900;margin-top:3px;line-height:1.3}
 .pop-body{padding:11px 14px 13px;font-size:12px}
@@ -229,7 +235,7 @@ font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;color:var(--ink);
 content:"";position:absolute;top:7px;left:50%;transform:translateX(-50%);
 width:34px;height:4px;border-radius:2px;background:var(--line);
 }
-.leaflet-popup-content{width:238px!important}
+.leaflet-popup-content{width:238px!important;max-height:min(58vh,420px)}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -378,6 +384,10 @@ L.marker([HOME.lat,HOME.lng],{
 /* markers */
 const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const layer = L.layerGroup().addTo(map);
+/* 今レイヤに入っているスポットのID。まるごと消して入れ直すと、開いている
+   ポップアップも一緒に閉じてしまう。記録を書くたびに render() が走るので、
+   増えた分・減った分だけ動かす。render() より先に呼ばれるのでここで用意する */
+const onMap = new Set();
 SPOTS.forEach(s=>{
   const c = COLORS[s.cat] || '#666';
   s.color = c;
@@ -685,15 +695,22 @@ function visible(s){
   if(state.rainOnly && !['◎','○'].includes(s.rain)) return false;
   return true;
 }
+function setTooltip(s){
+  s.marker.unbindTooltip();
+  s.marker.bindTooltip(s.name, state.names
+    ? {permanent:true,direction:'right',offset:[9,0],className:'nm-tip'}
+    : {direction:'top',offset:[0,-8],className:'nm-tip'});
+  s.tipNames = state.names;
+}
 function render(){
-  layer.clearLayers();
   const vis = SPOTS.filter(visible).sort((a,b)=>(a.c1||999)-(b.c1||999));
+  const keep = new Set(vis.map(s=>s.id));
+  SPOTS.forEach(s=>{
+    if(onMap.has(s.id) && !keep.has(s.id)){ layer.removeLayer(s.marker); onMap.delete(s.id); }
+  });
   vis.forEach(s=>{
-    s.marker.addTo(layer);
-    s.marker.unbindTooltip();
-    s.marker.bindTooltip(s.name, state.names
-      ? {permanent:true,direction:'right',offset:[9,0],className:'nm-tip'}
-      : {direction:'top',offset:[0,-8],className:'nm-tip'});
+    if(!onMap.has(s.id)){ s.marker.addTo(layer); onMap.add(s.id); }
+    if(s.tipNames !== state.names) setTooltip(s);
   });
   el('shown').textContent = vis.length;
 
