@@ -1,0 +1,17 @@
+{
+  "id": "/",
+  "name": "高田駅発 家族お出かけマップ",
+  "short_name": "お出かけマップ",
+  "description": "高田駅を起点に、家族で行ける128スポットを地図で見て、行った記録を残す",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F1F4F3",
+  "theme_color": "#10222E",
+  "lang": "ja",
+  "dir": "ltr",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

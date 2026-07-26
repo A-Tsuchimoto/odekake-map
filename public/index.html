@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
+<title>高田駅発 家族お出かけマップ</title>
+<meta name="description" content="横浜市営地下鉄グリーンライン高田駅を起点に、家族で行けるお出かけスポットを地図で見て、行った記録を残すための個人用アプリ。">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#10222E">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="お出かけマップ">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+--ink:#10222E;
+--ink-70:rgba(16,34,46,.70);
+--ink-45:rgba(16,34,46,.45);
+--line:rgba(16,34,46,.14);
+--paper:#FFFFFF;
+--shell:#F1F4F3;
+--ring:#10222E;
+--focus:#1D7FD6;
+--shadow:0 6px 24px rgba(16,34,46,.16);
+--sans:"Zen Kaku Gothic New","Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+font-family:var(--sans);color:var(--ink);background:var(--shell);
+font-feature-settings:"palt" 1;-webkit-font-smoothing:antialiased;
+overflow:hidden;
+}
+#map{position:absolute;inset:0;background:#E7ECEA}
+.leaflet-container{font-family:var(--sans)}
+header{
+position:absolute;top:0;left:0;right:0;z-index:600;
+display:flex;align-items:baseline;gap:14px;
+padding:12px 18px;
+background:linear-gradient(to bottom,rgba(255,255,255,.96),rgba(255,255,255,.82) 70%,rgba(255,255,255,0));
+pointer-events:none;
+}
+h1{
+margin:0;font-size:17px;font-weight:900;letter-spacing:.02em;
+}
+h1 small{display:block;font-size:11px;font-weight:500;color:var(--ink-45);letter-spacing:.12em;margin-bottom:2px}
+.count{
+font-size:12px;color:var(--ink-70);font-weight:700;
+font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.count b{font-size:19px;color:var(--ink)}
+.panel{
+position:absolute;z-index:700;top:64px;left:18px;width:300px;
+max-height:calc(100% - 88px);
+display:flex;flex-direction:column;
+background:var(--paper);border-radius:14px;box-shadow:var(--shadow);
+overflow:hidden;
+}
+.panel-scroll{overflow-y:auto;overscroll-behavior:contain}
+.block{padding:13px 15px;border-bottom:1px solid var(--line)}
+.block:last-child{border-bottom:0}
+.lbl{
+font-size:10px;letter-spacing:.14em;font-weight:700;color:var(--ink-45);
+margin:0 0 9px;display:flex;justify-content:space-between;align-items:center;
+}
+.lbl button{
+font:inherit;font-size:10px;letter-spacing:.08em;border:0;background:none;
+color:var(--focus);cursor:pointer;padding:2px 4px;border-radius:4px;font-weight:700;
+}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{
+display:inline-flex;align-items:center;gap:5px;
+font:inherit;font-size:11.5px;font-weight:700;
+border:1px solid var(--line);background:#fff;color:var(--ink-70);
+border-radius:999px;padding:4px 9px 4px 7px;cursor:pointer;
+transition:background .12s,color .12s,border-color .12s;
+}
+.chip .dot{width:9px;height:9px;border-radius:50%;background:currentColor;flex:none}
+.chip[aria-pressed="true"]{background:var(--c);border-color:var(--c);color:#fff}
+.chip[aria-pressed="false"]{opacity:.5}
+.chip:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.chip .n{font-variant-numeric:tabular-nums;opacity:.75;font-size:10px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px 0}
+.row label{font-size:12.5px;font-weight:500}
+.val{font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink-70)}
+input[type=range]{width:100%;accent-color:var(--ink);margin:2px 0 0}
+.toggle{
+position:relative;width:38px;height:22px;border-radius:99px;border:0;
+background:var(--line);cursor:pointer;flex:none;transition:background .15s;
+}
+.toggle::after{
+content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;
+background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .15s;
+}
+.toggle[aria-pressed="true"]{background:var(--ink)}
+.toggle[aria-pressed="true"]::after{transform:translateX(16px)}
+.toggle:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.list{padding:0}
+.list-head{padding:11px 15px 7px;position:sticky;top:0;background:var(--paper);z-index:2}
+.item{
+width:100%;text-align:left;border:0;background:none;font:inherit;cursor:pointer;
+padding:8px 15px;display:grid;grid-template-columns:10px 1fr auto;gap:9px;align-items:baseline;
+border-top:1px solid var(--line);
+}
+.item:hover,.item:focus-visible{background:#F4F7F6;outline:none}
+.item .bar{width:4px;height:100%;min-height:22px;border-radius:2px;background:var(--c);grid-row:span 2}
+.item .nm{font-size:12.5px;font-weight:700;line-height:1.35}
+.item .mt{font-size:10.5px;color:var(--ink-45);font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:700}
+.item .sub{grid-column:2/4;font-size:10.5px;color:var(--ink-45);margin-top:1px}
+.empty{padding:22px 15px;font-size:12px;color:var(--ink-45);line-height:1.7}
+.pin{
+width:15px;height:15px;border-radius:50%;
+border:2.5px solid #fff;box-shadow:0 1px 4px rgba(16,34,46,.45);
+transition:transform .12s;
+}
+.pin.on{transform:scale(1.5);z-index:1000}
+.pin{display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:900;line-height:1}
+.pin.done::after{content:"✓"}
+.pin.want{box-shadow:0 0 0 3px #F0B429,0 1px 4px rgba(16,34,46,.45)}
+.pin.plan{box-shadow:0 0 0 3px #1D7FD6,0 1px 4px rgba(16,34,46,.45)}
+.pin.skip{opacity:.3;filter:grayscale(1);transform:scale(.75)}
+.conn{display:flex;flex-direction:column;gap:7px}
+.conn input[type=url],.conn input[type=password]{
+font:inherit;font-size:11.5px;width:100%;padding:7px 9px;border-radius:7px;
+border:1px solid var(--line);background:#F8FAF9;color:var(--ink);
+}
+.conn input:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+.btnrow{display:flex;gap:6px}
+.btn{
+flex:1;font:inherit;font-size:11.5px;font-weight:700;padding:7px 6px;border-radius:7px;
+border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;
+}
+.btn.pri{background:var(--ink);color:#fff;border-color:var(--ink)}
+.btn:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.status-msg{font-size:10.5px;color:var(--ink-45);line-height:1.6;margin:2px 0 0}
+.status-msg.err{color:#C0392B}
+.status-msg.ok{color:#1F7A4D}
+.status-msg.warn{color:#B26A00;font-weight:700}
+.badge{
+display:inline-block;font-size:9.5px;font-weight:900;padding:1px 5px;border-radius:4px;
+background:var(--line);color:var(--ink-70);margin-right:5px;vertical-align:1px;
+}
+.badge.done{background:#1F7A4D;color:#fff}
+.badge.want{background:#F0B429;color:#3A2A00}
+.badge.plan{background:#1D7FD6;color:#fff}
+.progress{
+height:5px;border-radius:3px;background:var(--line);overflow:hidden;margin:8px 0 0;
+}
+.progress i{display:block;height:100%;background:#1F7A4D;width:0;transition:width .3s}
+.rec{border-top:1px solid var(--line);margin-top:10px;padding-top:10px}
+.rec .today{width:100%;margin-bottom:8px;padding:9px;font-size:12.5px}
+.rec .today.done{background:#1F7A4D;border-color:#1F7A4D}
+.st-row{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:9px}
+.st{
+font:inherit;font-size:10.5px;font-weight:700;padding:4px 8px;border-radius:99px;cursor:pointer;
+border:1px solid var(--line);background:#fff;color:var(--ink-70);
+}
+.st[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff}
+.rec label{display:block;font-size:10px;letter-spacing:.1em;font-weight:700;color:var(--ink-45);margin:0 0 3px}
+.rec input[type=date],.rec textarea,.rec input[type=text]{
+font:inherit;font-size:12px;width:100%;padding:6px 8px;border-radius:7px;
+border:1px solid var(--line);background:#F8FAF9;color:var(--ink);margin-bottom:8px;resize:vertical;
+}
+.rec input:focus-visible,.rec textarea:focus-visible,.st:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+.stars{display:flex;gap:2px;margin-bottom:9px}
+.star{
+font:inherit;font-size:17px;line-height:1;border:0;background:none;cursor:pointer;padding:1px 2px;
+color:var(--line);
+}
+.star.lit{color:#F0B429}
+.saved{font-size:10px;color:#1F7A4D;font-weight:700;height:13px;margin:0 0 6px;opacity:0;transition:opacity .2s}
+.saved.show{opacity:1}
+.home{
+width:17px;height:17px;border-radius:50%;background:var(--ink);
+border:3px solid #fff;box-shadow:0 2px 8px rgba(16,34,46,.5);
+}
+.leaflet-tooltip.nm-tip{
+background:rgba(255,255,255,.94);border:0;border-radius:5px;
+box-shadow:0 1px 5px rgba(16,34,46,.22);
+font-size:10.5px;font-weight:700;color:var(--ink);padding:2px 6px;white-space:nowrap;
+}
+.leaflet-tooltip.nm-tip::before{display:none}
+.leaflet-tooltip.ring-tip{
+background:none;border:0;box-shadow:none;color:var(--ink-45);
+font-size:10px;font-weight:700;letter-spacing:.1em;padding:0;
+}
+.leaflet-tooltip.ring-tip::before{display:none}
+.leaflet-popup-content-wrapper{border-radius:12px;box-shadow:var(--shadow);padding:0;overflow:hidden}
+.leaflet-popup-content{margin:0;width:264px!important;line-height:1.5}
+.pop-top{padding:12px 14px 10px;color:#fff}
+.pop-cat{font-size:9.5px;letter-spacing:.13em;font-weight:700;opacity:.85}
+.pop-nm{font-size:15px;font-weight:900;margin-top:3px;line-height:1.3}
+.pop-body{padding:11px 14px 13px;font-size:12px}
+.facts{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin:0 0 9px;font-size:11.5px}
+.facts dt{color:var(--ink-45);font-weight:700;white-space:nowrap}
+.facts dd{margin:0;font-variant-numeric:tabular-nums}
+.pop-body p{margin:0 0 8px;color:var(--ink-70);font-size:11.5px}
+.pop-note{
+background:#F4F7F6;border-left:3px solid var(--line);
+padding:6px 9px;font-size:11px;color:var(--ink-70);margin:0 0 10px;border-radius:0 5px 5px 0;
+}
+.links{display:flex;gap:7px}
+.links a{
+flex:1;text-align:center;text-decoration:none;font-size:11.5px;font-weight:700;
+padding:7px 4px;border-radius:7px;border:1px solid var(--line);color:var(--ink);
+}
+.links a.pri{background:var(--ink);color:#fff;border-color:var(--ink)}
+.links a:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.sheet-btn{display:none}
+@media (max-width:720px){
+header{padding:9px 14px}
+h1{font-size:15px}
+.panel{
+top:auto;bottom:0;left:0;right:0;width:auto;border-radius:16px 16px 0 0;
+max-height:72%;transform:translateY(calc(100% - 46px));transition:transform .22s ease;
+}
+.panel.open{transform:translateY(0)}
+.sheet-btn{
+display:flex;align-items:center;justify-content:center;gap:8px;
+width:100%;height:46px;flex:none;border:0;background:var(--paper);
+font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;color:var(--ink);
+}
+.sheet-btn::before{
+content:"";position:absolute;top:7px;left:50%;transform:translateX(-50%);
+width:34px;height:4px;border-radius:2px;background:var(--line);
+}
+.leaflet-popup-content{width:238px!important}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<header>
+  <h1><small>TAKATA STA. — FAMILY OUTINGS</small>高田駅発 家族お出かけマップ</h1>
+  <div class="count"><b id="shown">0</b> / <span id="total">0</span> 件</div>
+</header>
+
+<aside class="panel" id="panel">
+  <button class="sheet-btn" id="sheetBtn" aria-expanded="false">絞り込みと一覧</button>
+  <div class="panel-scroll">
+    <div class="block">
+      <p class="lbl">おでかけの記録</p>
+      <div class="conn">
+        <p class="status-msg" id="msg">ピンをタップして「今日行った」を押すだけ。記録は自動で保存されます。</p>
+        <div class="progress"><i id="bar"></i></div>
+        <p class="status-msg" id="dirty"></p>
+        <div id="tokenWrap" hidden>
+          <input type="password" id="token" placeholder="あいことば" autocomplete="current-password">
+          <button class="btn pri" id="connect" style="width:100%;margin-top:6px">つなぐ</button>
+        </div>
+        <div class="btnrow">
+          <button class="btn" id="expJson">書き出す</button>
+          <button class="btn" id="impJson">読み込む</button>
+          <button class="btn" id="copyJson">コピー</button>
+        </div>
+        <input type="file" id="file" accept=".json,.csv,application/json,text/csv" hidden>
+      </div>
+    </div>
+    <div class="block">
+      <p class="lbl">訪問状況</p>
+      <div class="chips" id="stats"></div>
+    </div>
+    <div class="block">
+      <p class="lbl">カテゴリ <button id="allCat">すべて表示</button></p>
+      <div class="chips" id="cats"></div>
+    </div>
+    <div class="block">
+      <p class="lbl">条件</p>
+      <div class="row"><label for="car">車で<span class="val" id="carV"></span></label></div>
+      <input type="range" id="car" min="15" max="100" step="5" value="100">
+      <div class="row"><label for="train">電車で<span class="val" id="trainV"></span></label></div>
+      <input type="range" id="train" min="20" max="150" step="10" value="150">
+      <div class="row"><label for="rain">雨の日でも行ける（◎○）</label><button class="toggle" id="rain" aria-pressed="false"></button></div>
+      <div class="row"><label for="names">施設名を地図に表示</label><button class="toggle" id="names" aria-pressed="false"></button></div>
+      <div class="row"><label for="rings">高田駅からの距離の輪</label><button class="toggle" id="rings" aria-pressed="true"></button></div>
+    </div>
+    <div class="block list">
+      <p class="lbl list-head">近い順（車の最短時間）</p>
+      <div id="list"></div>
+    </div>
+  </div>
+</aside>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="spots.js"></script>
+<script>
+const SPOTS = window.__SPOTS__ || [];
+const HOME = {lat:35.5496391, lng:139.620117, name:"高田駅"};
+const COLORS = {
+  "科学館系":"#4338CA",
+  "水族館・水辺の生き物":"#0EA5B7",
+  "海・港・砂浜":"#1D7FD6",
+  "川・湖・ダム":"#16A085",
+  "森・里山":"#3E8E3E",
+  "山・ハイキング":"#17624A",
+  "大型公園":"#8FA31E",
+  "牧場・農業体験":"#C98A14",
+  "アスレチック":"#E2661A",
+  "遊園地":"#E24A87",
+  "テーマパーク":"#D33B3B"
+};
+const ORDER = Object.keys(COLORS);
+const active = new Set(ORDER);
+
+/* visit status: sheet value -> {css class, badge class, label} */
+const STATUS = {
+  "候補":   {cls:"",     tone:"",     label:"候補"},
+  "行きたい":{cls:"want", tone:"want", label:"行きたい"},
+  "予定":   {cls:"plan", tone:"plan", label:"予定"},
+  "訪問済み":{cls:"done", tone:"done", label:"訪問済み"},
+  "見送り":  {cls:"skip", tone:"",     label:"見送り"}
+};
+const SORDER = Object.keys(STATUS);
+const activeStatus = new Set(SORDER);
+const records = {};   /* ID -> {訪問状況, 訪問日, 満足度, 家族メモ, ...} */
+
+/* storage: Claude artifact storage if present, else localStorage, else memory */
+const store = {
+  async get(k){
+    try{ if(window.storage){ const r = await window.storage.get(k); return r ? r.value : null; } }catch(e){}
+    try{ return localStorage.getItem(k); }catch(e){ return null; }
+  },
+  async set(k,v){
+    try{ if(window.storage){ await window.storage.set(k,v); return; } }catch(e){}
+    try{ localStorage.setItem(k,v); }catch(e){}
+  }
+};
+
+const map = L.map('map',{zoomControl:false, minZoom:8, maxZoom:17}).setView([35.50,139.62],10);
+L.control.zoom({position:'bottomright'}).addTo(map);
+const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+  attribution:'&copy; OpenStreetMap contributors &copy; CARTO', subdomains:'abcd', maxZoom:19
+}).addTo(map);
+let tileFails = 0;
+tiles.on('tileerror', ()=>{
+  if(++tileFails === 8 && typeof msg === 'function'){
+    msg('地図の背景画像を読み込めませんでした。ピン、距離の輪、一覧はそのまま使えます。','err');
+  }
+});
+
+/* distance rings from home */
+const ringLayer = L.layerGroup().addTo(map);
+[10,20,30,40].forEach(km=>{
+  L.circle([HOME.lat,HOME.lng],{
+    radius:km*1000, color:'#10222E', weight:1, opacity:.28,
+    dashArray:'3 6', fill:km===10, fillColor:'#10222E', fillOpacity:.03, interactive:false
+  }).addTo(ringLayer);
+  L.marker([HOME.lat + km/111.32, HOME.lng],{opacity:0, interactive:false})
+    .bindTooltip(km+'km',{permanent:true,direction:'center',className:'ring-tip'}).addTo(ringLayer);
+});
+L.marker([HOME.lat,HOME.lng],{
+  icon:L.divIcon({className:'',html:'<div class="home"></div>',iconSize:[17,17],iconAnchor:[8.5,8.5]}),
+  zIndexOffset:1000
+}).bindTooltip('高田駅（起点）',{permanent:true,direction:'right',offset:[10,0],className:'nm-tip'}).addTo(map);
+
+/* markers */
+const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const layer = L.layerGroup().addTo(map);
+SPOTS.forEach(s=>{
+  const c = COLORS[s.cat] || '#666';
+  s.color = c;
+  s.marker = L.marker([s.lat,s.lng],{icon:pinIcon(s), title:s.name});
+  s.marker.bindTooltip(s.name,{direction:'top',offset:[0,-8],className:'nm-tip'});
+  s.marker.bindPopup(()=>popup(s),{maxWidth:280,autoPanPadding:[24,70]});
+});
+
+const gmapUrl = s => 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(s.name);
+function statusOf(s){
+  const v = (records[s.id] && records[s.id]['訪問状況']) || '候補';
+  return STATUS[v] ? v : '候補';
+}
+function pinIcon(s){
+  const st = STATUS[statusOf(s)];
+  return L.divIcon({
+    className:'',
+    html:`<div class="pin ${st.cls}" style="background:${s.color}"></div>`,
+    iconSize:[15,15], iconAnchor:[7.5,7.5]
+  });
+}
+
+function popup(s){
+  const r = records[s.id] || {};
+  const sv = statusOf(s);
+  const f = [];
+  if(s.c1) f.push(['車', `${s.c1}–${s.c2}分`]);
+  if(s.t1) f.push(['電車', `${s.t1}–${s.t2}分`]);
+  if(s.rain) f.push(['雨の日', s.rain]);
+  if(s.age) f.push(['年齢', s.age]);
+  if(s.rate) f.push(['評価', `★ ${s.rate}`]);
+  const rec = [];
+  if(r['同行者']) rec.push(['同行者', r['同行者']]);
+  const done = sv === '訪問済み';
+  const rate = +(r['満足度'] || 0);
+  const stars = [1,2,3,4,5].map(i =>
+    `<button class="star ${i<=rate?'lit':''}" data-star="${i}" aria-label="満足度${i}">★</button>`).join('');
+  const sts = SORDER.map(k =>
+    `<button class="st" data-st="${k}" aria-pressed="${k===sv}">${STATUS[k].label}</button>`).join('');
+
+  return `
+  <div class="pop-top" style="background:${s.color}">
+    <div class="pop-cat">${esc(s.cat)}${s.sub?' ／ '+esc(s.sub):''}</div>
+    <div class="pop-nm">${esc(s.name)}</div>
+  </div>
+  <div class="pop-body">
+    <dl class="facts">${f.map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}
+      ${rec.map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}
+      <dt>場所</dt><dd>${esc(s.addr)}</dd></dl>
+    <p>${esc(s.desc)}</p>
+    ${s.note?`<div class="pop-note">${esc(s.note)}</div>`:''}
+    <div class="links">
+      <a class="pri" href="${gmapUrl(s)}" target="_blank" rel="noopener">地図で開く</a>
+      ${s.url?`<a href="${esc(s.url)}" target="_blank" rel="noopener">公式サイト</a>`:''}
+    </div>
+    <div class="rec" data-id="${s.id}">
+      <button class="btn pri today ${done?'done':''}" data-today>${done?'訪問済み　日付を今日にする':'今日行った'}</button>
+      <div class="st-row">${sts}</div>
+      <label for="d-${s.id}">訪問日</label>
+      <input type="date" id="d-${s.id}" data-f="訪問日" value="${esc(r['訪問日']||'')}">
+      <label>満足度</label>
+      <div class="stars">${stars}</div>
+      <label for="m-${s.id}">メモ</label>
+      <textarea id="m-${s.id}" rows="2" data-f="家族メモ" placeholder="子どもの反応、混み具合、次にやりたいこと">${esc(r['家族メモ']||'')}</textarea>
+      <p class="saved">保存しました</p>
+    </div>
+  </div>`;
+}
+
+/* filters */
+const el = id => document.getElementById(id);
+const state = {car:100, train:150, rainOnly:false, names:false};
+el('total').textContent = SPOTS.length;
+
+/* ---- status chips ---- */
+el('stats').innerHTML = SORDER.map(k=>{
+  const tone = {want:'#F0B429', plan:'#1D7FD6', done:'#1F7A4D'}[STATUS[k].tone] || '#7A8B93';
+  return `<button class="chip" data-st="${k}" aria-pressed="true" style="--c:${tone};color:#fff">
+    <span class="dot"></span>${STATUS[k].label}<span class="n" data-cnt="${k}">0</span></button>`;
+}).join('');
+el('stats').addEventListener('click',e=>{
+  const b = e.target.closest('.chip'); if(!b) return;
+  const k = b.dataset.st, on = b.getAttribute('aria-pressed')==='true';
+  b.setAttribute('aria-pressed', String(!on));
+  b.style.color = on ? b.style.getPropertyValue('--c') : '#fff';
+  on ? activeStatus.delete(k) : activeStatus.add(k);
+  render();
+});
+
+/* ---- records: save & restore ----
+   mode 'server' = records.json in this folder (start.command / start.bat running)
+   mode 'local'  = browser storage fallback                                        */
+const KEY = 'outing-records-v1';
+let saveTimer = null, mode = 'local';
+
+const API = '/api/records';
+let token = '';
+function showTokenInput(show){ const w = el('tokenWrap'); if(w) w.hidden = !show; }
+async function pullRemote(){
+  if(!token) return false;
+  try{
+    const r = await fetch(API, {cache:'no-store', headers:{'X-Token':token}});
+    if(r.status === 401){ showTokenInput(true); msg('あいことばが違うようです。', 'err'); return false; }
+    if(!r.ok) return false;
+    const o = await r.json();
+    Object.keys(records).forEach(k => delete records[k]);
+    Object.entries(o).forEach(([k,v]) => records[k] = v);
+    mode = 'server'; showTokenInput(false);
+    return true;
+  }catch(e){ return false; }
+}
+async function pushRemote(){
+  const res = await fetch(API, {
+    method:'POST',
+    headers:{'Content-Type':'application/json', 'X-Token':token},
+    body:JSON.stringify(records)
+  });
+  if(!res.ok) throw new Error('HTTP ' + res.status);
+}
+function msg(text, kind){
+  const m = el('msg'); m.textContent = text; m.className = 'status-msg' + (kind ? ' '+kind : '');
+}
+function saveRecords(){
+  updateDirty();
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async ()=>{
+    if(mode === 'server'){
+      try{
+        await pushRemote();
+        msg('保存しました。', 'ok');
+      }catch(e){
+        store.set(KEY, JSON.stringify(records));
+        msg('サーバーに保存できませんでした（' + e.message + '）。この端末に控えたので、電波が戻ったら「つなぐ」を押してください。', 'err');
+      }
+    } else {
+      store.set(KEY, JSON.stringify(records));
+    }
+  }, 350);
+}
+function parseCSV(text){
+  const rows = []; let row = [], cell = '', q = false;
+  text = text.replace(/^\uFEFF/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  for(let i=0;i<text.length;i++){
+    const ch = text[i];
+    if(q){
+      if(ch === '"'){ if(text[i+1] === '"'){ cell += '"'; i++; } else q = false; }
+      else cell += ch;
+    } else if(ch === '"'){ q = true; }
+    else if(ch === ','){ row.push(cell); cell = ''; }
+    else if(ch === '\n'){ row.push(cell); rows.push(row); row = []; cell = ''; }
+    else cell += ch;
+  }
+  if(cell.length || row.length){ row.push(cell); rows.push(row); }
+  return rows.filter(r => r.some(c => c.trim() !== ''));
+}
+function ingestCSV(text){
+  const rows = parseCSV(text);
+  const head = rows[0].map(h => h.trim());
+  const idx = head.indexOf('ID');
+  if(idx < 0) throw new Error('ID列が見つかりません');
+  let n = 0;
+  rows.slice(1).forEach(r=>{
+    const id = (r[idx]||'').trim(); if(!id) return;
+    const o = {}; head.forEach((h,i)=>{ const v = (r[i]||'').trim(); if(v) o[h] = v; });
+    if(Object.keys(o).length > 1){ records[id] = o; n++; }
+  });
+  return n;
+}
+const SNAP = 'outing-export-snapshot-v1';
+let snapshot = '';
+function updateDirty(){
+  const n = Object.keys(records).length;
+  const d = el('dirty'); if(!d) return;
+  if(mode === 'server'){
+    d.textContent = '✓ サーバーに自動保存されます';
+    d.className = 'status-msg ok';
+    el('expJson').classList.remove('pri');
+    return;
+  }
+  if(!n){ d.textContent = ''; d.className = 'status-msg'; el('expJson').classList.remove('pri'); return; }
+  const dirty = JSON.stringify(records) !== snapshot;
+  d.textContent = dirty ? '⚠ まだ書き出していない記録があります' : '✓ 書き出し済みです';
+  d.className = 'status-msg ' + (dirty ? 'warn' : 'ok');
+  el('expJson').classList.toggle('pri', dirty);
+}
+function markExported(){
+  snapshot = JSON.stringify(records);
+  store.set(SNAP, snapshot);
+  updateDirty();
+}
+el('copyJson').onclick = async ()=>{
+  const text = JSON.stringify(records);
+  try{
+    await navigator.clipboard.writeText(text);
+    msg('記録をコピーしました。Claudeのチャットに貼れば、元のExcelに反映できます。', 'ok');
+    markExported();
+  }catch(e){ msg('コピーできませんでした。「書き出す」を使ってください。', 'err'); }
+};
+el('expJson').onclick = ()=>{
+  const blob = new Blob([JSON.stringify(records,null,2)],{type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'おでかけ記録_' + new Date().toISOString().slice(0,10) + '.json';
+  a.click(); URL.revokeObjectURL(a.href);
+  msg('記録を書き出しました。このファイルがあれば、いつでも元に戻せます。', 'ok');
+  markExported();
+};
+el('impJson').onclick = ()=> el('file').click();
+el('file').onchange = e=>{
+  const f = e.target.files[0]; if(!f) return;
+  const rd = new FileReader();
+  rd.onload = ()=>{
+    try{
+      let n;
+      if(/\.csv$/i.test(f.name)) n = ingestCSV(rd.result);
+      else {
+        const o = JSON.parse(rd.result);
+        n = 0; Object.entries(o).forEach(([k,v])=>{ records[k] = v; n++; });
+      }
+      saveRecords(); refreshMarkers();
+      msg(n + '件の記録を読み込みました。', 'ok');
+    }catch(err){ msg('読み込めませんでした（' + err.message + '）。', 'err'); }
+  };
+  rd.readAsText(f);
+  e.target.value = '';
+};
+function refreshMarkers(){
+  SPOTS.forEach(s => s.marker.setIcon(pinIcon(s)));
+  render();
+}
+el('connect').onclick = async ()=>{
+  token = el('token').value.trim();
+  if(!token){ msg('あいことばを入れてください。', 'err'); return; }
+  await store.set('api-token', token);
+  if(await pullRemote()){ refreshMarkers(); updateDirty(); msg('つながりました。', 'ok'); }
+};
+(async ()=>{
+  token = (await store.get('api-token')) || '';
+  if(!token) showTokenInput(true);
+  if(await pullRemote()){
+    refreshMarkers(); updateDirty();
+    const n = Object.values(records).filter(r => r['訪問状況'] === '訪問済み').length;
+    msg('記録を読み込みました' + (n ? '（訪問済み ' + n + '件）' : '') + '。編集は自動で保存されます。', 'ok');
+    return;
+  }
+  snapshot = (await store.get(SNAP)) || '';
+  const raw = await store.get(KEY);
+  if(raw){
+    try{
+      Object.entries(JSON.parse(raw)).forEach(([k,v])=> records[k] = v);
+      refreshMarkers();
+      const n = Object.values(records).filter(r => r['訪問状況'] === '訪問済み').length;
+      if(n) msg('前回までの記録を読み込みました（訪問済み ' + n + '件）。', 'ok');
+      updateDirty();
+    }catch(e){}
+  }
+})();
+
+el('cats').innerHTML = ORDER.map(c=>{
+  const n = SPOTS.filter(s=>s.cat===c).length;
+  return `<button class="chip" data-cat="${c}" aria-pressed="true" style="--c:${COLORS[c]};color:${COLORS[c]}">
+    <span class="dot"></span>${c}<span class="n">${n}</span></button>`;
+}).join('');
+el('cats').addEventListener('click',e=>{
+  const b = e.target.closest('.chip'); if(!b) return;
+  const c = b.dataset.cat, on = b.getAttribute('aria-pressed')==='true';
+  b.setAttribute('aria-pressed', String(!on));
+  b.style.color = on ? COLORS[c] : '#fff';
+  on ? active.delete(c) : active.add(c);
+  render();
+});
+el('allCat').onclick = ()=>{
+  ORDER.forEach(c=>active.add(c));
+  el('cats').querySelectorAll('.chip').forEach(b=>{b.setAttribute('aria-pressed','true');b.style.color='#fff';});
+  render();
+};
+el('cats').querySelectorAll('.chip').forEach(b=>b.style.color='#fff');
+
+function bindRange(id, key, fmt){
+  const r = el(id), v = el(id+'V');
+  const upd = ()=>{ state[key] = +r.value; v.textContent = fmt(+r.value); render(); };
+  r.addEventListener('input', upd); upd();
+}
+bindRange('car','car', v => v>=100 ? '時間はこだわらない' : v+'分以内');
+bindRange('train','train', v => v>=150 ? '時間はこだわらない' : v+'分以内');
+
+function bindToggle(id, fn, init){
+  const b = el(id);
+  b.addEventListener('click',()=>{
+    const on = b.getAttribute('aria-pressed')!=='true';
+    b.setAttribute('aria-pressed',String(on)); fn(on);
+  });
+  if(init!==undefined) fn(init);
+}
+bindToggle('rain', on=>{state.rainOnly=on; render();});
+bindToggle('names', on=>{state.names=on; render();});
+bindToggle('rings', on=> on ? ringLayer.addTo(map) : map.removeLayer(ringLayer));
+
+/* render */
+function visible(s){
+  if(!active.has(s.cat)) return false;
+  if(!activeStatus.has(statusOf(s))) return false;
+  if(state.car<100 && (!s.c1 || s.c1>state.car)) return false;
+  if(state.train<150 && (!s.t1 || s.t1>state.train)) return false;
+  if(state.rainOnly && !['◎','○'].includes(s.rain)) return false;
+  return true;
+}
+function render(){
+  layer.clearLayers();
+  const vis = SPOTS.filter(visible).sort((a,b)=>(a.c1||999)-(b.c1||999));
+  vis.forEach(s=>{
+    s.marker.addTo(layer);
+    s.marker.unbindTooltip();
+    s.marker.bindTooltip(s.name, state.names
+      ? {permanent:true,direction:'right',offset:[9,0],className:'nm-tip'}
+      : {direction:'top',offset:[0,-8],className:'nm-tip'});
+  });
+  el('shown').textContent = vis.length;
+
+  const cnt = {}; SORDER.forEach(k => cnt[k] = 0);
+  SPOTS.forEach(s => cnt[statusOf(s)]++);
+  SORDER.forEach(k=>{
+    const n = el('stats').querySelector(`[data-cnt="${k}"]`);
+    if(n) n.textContent = cnt[k];
+  });
+  el('bar').style.width = (SPOTS.length ? cnt['訪問済み'] / SPOTS.length * 100 : 0) + '%';
+
+  el('list').innerHTML = vis.length ? vis.map(s=>`
+    <button class="item" data-id="${s.id}" style="--c:${s.color}">
+      <span class="bar"></span><span class="nm">${
+        statusOf(s)!=='候補' ? `<span class="badge ${STATUS[statusOf(s)].tone}">${STATUS[statusOf(s)].label}</span>` : ''
+      }${esc(s.name)}</span>
+      <span class="mt">車${s.c1||'–'}分</span>
+      <span class="sub">${esc(s.cat)}・${esc(s.addr)}${s.rain?'・雨'+s.rain:''}</span>
+    </button>`).join('')
+    : `<p class="empty">条件に合うスポットがありません。所要時間をゆるめるか、カテゴリを追加してください。</p>`;
+}
+el('list').addEventListener('click',e=>{
+  const b = e.target.closest('.item'); if(!b) return;
+  const s = SPOTS.find(x=>x.id===b.dataset.id);
+  map.flyTo([s.lat,s.lng], Math.max(map.getZoom(),13), {duration:.6});
+  s.marker.openPopup();
+  if(window.innerWidth<=720) el('panel').classList.remove('open');
+});
+
+/* ---- editing inside the popup ---- */
+function flash(root){
+  const p = root.querySelector('.saved'); if(!p) return;
+  p.classList.add('show'); clearTimeout(p._t);
+  p._t = setTimeout(()=> p.classList.remove('show'), 1400);
+}
+function set(id, field, value){
+  const r = records[id] || (records[id] = {ID:id});
+  if(value === '' || value == null) delete r[field]; else r[field] = value;
+  saveRecords();
+  const s = SPOTS.find(x => x.id === id);
+  if(s) s.marker.setIcon(pinIcon(s));
+  render();
+}
+const today = ()=>{
+  const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0,10);
+};
+map.on('popupopen', ev=>{
+  const root = ev.popup.getElement().querySelector('.rec'); if(!root) return;
+  const id = root.dataset.id;
+
+  root.querySelector('[data-today]').addEventListener('click',()=>{
+    set(id, '訪問状況', '訪問済み');
+    set(id, '訪問日', today());
+    root.querySelector('[data-f="訪問日"]').value = today();
+    root.querySelectorAll('.st').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.st === '訪問済み')));
+    const t = root.querySelector('[data-today]');
+    t.classList.add('done'); t.textContent = '訪問済み　日付を今日にする';
+    flash(root);
+  });
+
+  root.querySelectorAll('.st').forEach(b=>{
+    b.addEventListener('click',()=>{
+      set(id, '訪問状況', b.dataset.st);
+      root.querySelectorAll('.st').forEach(o => o.setAttribute('aria-pressed', String(o === b)));
+      const t = root.querySelector('[data-today]'), done = b.dataset.st === '訪問済み';
+      t.classList.toggle('done', done);
+      t.textContent = done ? '訪問済み　日付を今日にする' : '今日行った';
+      flash(root);
+    });
+  });
+
+  root.querySelectorAll('.star').forEach(b=>{
+    b.addEventListener('click',()=>{
+      const v = +b.dataset.star;
+      const cur = +(records[id] && records[id]['満足度'] || 0);
+      const nv = cur === v ? 0 : v;
+      set(id, '満足度', nv || '');
+      root.querySelectorAll('.star').forEach(o => o.classList.toggle('lit', +o.dataset.star <= nv));
+      flash(root);
+    });
+  });
+
+  root.querySelectorAll('[data-f]').forEach(inp=>{
+    inp.addEventListener('change',()=>{ set(id, inp.dataset.f, inp.value.trim()); flash(root); });
+  });
+  root.querySelector('textarea').addEventListener('keydown', e => e.stopPropagation());
+});
+
+/* mobile sheet */
+el('sheetBtn').addEventListener('click',()=>{
+  const p = el('panel'), open = p.classList.toggle('open');
+  el('sheetBtn').setAttribute('aria-expanded',String(open));
+  el('sheetBtn').textContent = open ? '閉じる' : '絞り込みと一覧';
+});
+
+render();
+if(SPOTS.length){
+  map.fitBounds(L.latLngBounds(SPOTS.map(s=>[s.lat,s.lng])).extend([HOME.lat,HOME.lng]),
+    {padding:[60,60], paddingTopLeft:[window.innerWidth>720?330:40, 80]});
+} else {
+  /* spots.js が読めなかったとき。地図だけでも高田駅を出しておく */
+  map.setView([HOME.lat,HOME.lng], 12);
+  msg('スポットのデータを読み込めませんでした。通信状態を確かめて、開き直してください。','err');
+}
+</script>
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=> navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+</script>
+</body>
+</html>

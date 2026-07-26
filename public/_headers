@@ -1,0 +1,28 @@
+# Cloudflare Pages のヘッダ設定。/api/ 側は functions/api/records.js が自分で付ける。
+#
+# CSP は外部の読み込み先を Leaflet(cdnjs)・Googleフォント・CARTOのタイルだけに絞ってある。
+# index.html は CSS も JS も中に書いてあるので 'unsafe-inline' は外せない。
+# 読み込み先を増やしたらここも足すこと。増やし忘れると本番でだけ黙って動かなくなる。
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), camera=(), microphone=(), interest-cohort=()
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://cdnjs.cloudflare.com; connect-src 'self'; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+
+# 中身が変わるものは毎回見に行かせる。デプロイしても古い画面が出続けるのを防ぐ
+/
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
+/sw.js
+  Cache-Control: no-cache
+/spots.js
+  Cache-Control: no-cache
+/manifest.webmanifest
+  Cache-Control: no-cache
+
+/icon-192.png
+  Cache-Control: public, max-age=604800
+/icon-512.png
+  Cache-Control: public, max-age=604800

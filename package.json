@@ -1,0 +1,15 @@
+{
+  "name": "odekake-map",
+  "private": true,
+  "version": "1.0.0",
+  "description": "高田駅発 家族お出かけマップ（Cloudflare Pages）",
+  "scripts": {
+    "dev": "wrangler pages dev",
+    "deploy": "wrangler pages deploy",
+    "build:spots": "node scripts/build-spots.mjs",
+    "check": "node scripts/build-spots.mjs --check"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}
