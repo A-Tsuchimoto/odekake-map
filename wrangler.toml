@@ -10,7 +10,7 @@ pages_build_output_dir = "public"
 # ここが未設定のままだとデプロイが通らない。
 [[kv_namespaces]]
 binding = "RECORDS"
-id = "PUT_YOUR_KV_NAMESPACE_ID_HERE"
+id = 1856af44c8e2454d8bc5b73fb0d86799
 
 # 本番ブランチ以外を push したときのプレビュー用。
 # 使うなら、もう1つKVを作って id を入れ、下の3行のコメントを外す。
