@@ -60,6 +60,21 @@ push すると Cloudflare 側が勝手にビルドして出す。CLIは要らな
 うまくいかないときは `/api/records` を直接開く。401なら正常（あいことば無しなので）。
 500なら KV かシークレットが効いていない＝手順4のやり直し漏れ。
 
+### デプロイが止まるとき
+
+Pagesプロジェクト > **Deployments** > 失敗したデプロイをクリックすると、
+どこで止まったかがログで分かる。よくあるのは次の4つ。
+
+| ログに出るもの | 原因 | 直し方 |
+|---|---|---|
+| `Unable to parse` / TOML の構文エラー | `wrangler.toml` の書き方。IDのクオート忘れが多い | `id = "..."` と**必ず引用符で囲む**。数字始まりの32桁なので裸で書くと壊れる |
+| `project name` が合わない旨 | `wrangler.toml` の `name` と、実際のPagesプロジェクト名が違う | プロジェクト名（`*.pages.dev` の左側）に `name =` を合わせる |
+| `KV namespace ... not found` | IDが違う／別アカウントの名前空間 | Storage & Databases > KV でIDを取り直して貼る |
+| `npm install` あたりで失敗 | ビルドイメージのNodeが古い | `.node-version`（このリポジトリに入っている）が効く。効かなければ Settings > Variables に `NODE_VERSION=22` |
+
+ビルド設定そのものは **Settings > Builds** で、Build command は**空**、Root directory は `/`。
+Build output directory は `wrangler.toml` の `pages_build_output_dir` が優先されるので触らなくてよい。
+
 ### プレビュー（本番ブランチ以外）
 
 別ブランチを push するとプレビューURLが出る。プレビューにKVを効かせたいときは、

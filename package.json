@@ -7,7 +7,7 @@
     "dev": "wrangler pages dev",
     "deploy": "wrangler pages deploy",
     "build:spots": "node scripts/build-spots.mjs",
-    "check": "node scripts/build-spots.mjs --check"
+    "check": "node scripts/build-spots.mjs --check && node scripts/check-config.mjs"
   },
   "devDependencies": {
     "wrangler": "^4"
