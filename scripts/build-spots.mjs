@@ -107,6 +107,19 @@ for (const s of spots) {
   }
 
   if (s.rain && !RAIN.includes(s.rain)) fail(`${at}: rain は ${RAIN.join("/")} のどれか（今: ${s.rain}）`);
+
+  /* おすすめの月。season が台帳の原文、months が絞り込み用に読み取った月 */
+  if (s.months !== undefined) {
+    if (!Array.isArray(s.months) || !s.months.length) {
+      fail(`${at}: months は1件以上の配列にするか、キーごと省くこと`);
+    } else if (s.months.some((m) => !Number.isInteger(m) || m < 1 || m > 12)) {
+      fail(`${at}: months は 1〜12 の整数（今: ${JSON.stringify(s.months)}）`);
+    } else if (new Set(s.months).size !== s.months.length) {
+      fail(`${at}: months に同じ月が2回入っている`);
+    }
+    if (!s.season) fail(`${at}: months があるのに season（台帳の原文）がない`);
+  }
+  if (s.season && typeof s.season !== "string") fail(`${at}: season は文字列で`);
   for (const k of ["t1", "t2", "c1", "c2"]) {
     if (s[k] != null && typeof s[k] !== "number") fail(`${at}: ${k} は数値で`);
   }

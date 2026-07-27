@@ -100,6 +100,13 @@ transition:background .12s,color .12s,border-color .12s;
 .row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px 0}
 .row label{font-size:12.5px;font-weight:500}
 .val{font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink-70)}
+.row select{
+font:inherit;font-size:12px;font-weight:700;color:var(--ink);
+border:1px solid var(--line);background:#F8FAF9;border-radius:7px;padding:5px 7px;cursor:pointer;
+}
+.row select:disabled{color:var(--ink-45);cursor:default}
+.row select:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+.hint{font-size:10.5px;color:var(--ink-45);line-height:1.5;margin:1px 0 3px}
 input[type=range]{width:100%;accent-color:var(--ink);margin:2px 0 0}
 .toggle{
 position:relative;width:38px;height:22px;border-radius:99px;border:0;
@@ -304,6 +311,11 @@ width:34px;height:4px;border-radius:2px;background:var(--line);
       <input type="range" id="car" min="15" max="100" step="5" value="100">
       <div class="row"><label for="train">電車・バスで<span class="val" id="trainV"></span></label></div>
       <input type="range" id="train" min="20" max="150" step="10" value="150">
+      <div class="row"><label for="month">特におすすめの月</label>
+        <select id="month">
+          <option value="0">指定なし</option>
+        </select></div>
+      <p class="hint" id="monthHint"></p>
       <div class="row"><label for="rain">雨の日でも行ける（◎○）</label><button class="toggle" id="rain" aria-pressed="false"></button></div>
       <div class="row"><label for="names">施設名を地図に表示</label><button class="toggle" id="names" aria-pressed="false"></button></div>
       <div class="row"><label for="rings" id="ringLbl">起点からの距離の輪</label><button class="toggle" id="rings" aria-pressed="true"></button></div>
@@ -453,6 +465,7 @@ function popup(s){
   if(s.c1) f.push(['車', `${s.c1}–${s.c2}分`]);
   if(s.t1) f.push(['電車・バス', `${s.t1}–${s.t2}分`]);
   if(s.rain) f.push(['雨の日', s.rain]);
+  if(s.season) f.push(['おすすめ', s.season]);
   if(s.age) f.push(['年齢', s.age]);
   if(s.rate) f.push(['評価', `★ ${s.rate}`]);
   const rec = [];
@@ -501,7 +514,7 @@ const ceilTo = (v,n) => Math.ceil(v/n)*n;
 const maxOf = k => SPOTS.reduce((m,s)=> Math.max(m, s[k] || 0), 0);
 const CAR_MAX = Math.max(60, ceilTo(maxOf('c1'), 5));
 const TRAIN_MAX = Math.max(90, ceilTo(maxOf('t1'), 10));
-const state = {car:CAR_MAX, train:TRAIN_MAX, rainOnly:false, names:false};
+const state = {car:CAR_MAX, train:TRAIN_MAX, rainOnly:false, names:false, month:0};
 el('car').max = CAR_MAX;     el('car').value = CAR_MAX;
 el('train').max = TRAIN_MAX; el('train').value = TRAIN_MAX;
 el('total').textContent = regionSpots().length;   /* 地域を切り替えたら setRegion が入れ直す */
@@ -725,6 +738,22 @@ function bindToggle(id, fn, init){
   });
   if(init!==undefined) fn(init);
 }
+/* 特におすすめの月。台帳の自由記述（例「7～8月（海水浴）」）から取った月で絞る。
+   月の情報が無い地域もあるので、その地域の件数を出して、無ければ選べなくする */
+for(let m=1;m<=12;m++){
+  el('month').insertAdjacentHTML('beforeend', `<option value="${m}">${m}月</option>`);
+}
+el('month').addEventListener('change', e=>{ state.month = +e.target.value; render(); });
+function syncMonth(){
+  const n = regionSpots().filter(s => s.months && s.months.length).length;
+  const sel = el('month');
+  sel.disabled = !n;
+  if(!n && state.month){ state.month = 0; sel.value = '0'; }
+  el('monthHint').textContent = n
+    ? `この地域で月の情報があるのは ${n} 件。選ぶと、その月がおすすめのスポットだけになります`
+    : 'この地域はまだ月の情報がありません';
+}
+
 bindToggle('rain', on=>{state.rainOnly=on; render();});
 bindToggle('names', on=>{state.names=on; render();});
 bindToggle('rings', on=> on ? ringLayer.addTo(map) : map.removeLayer(ringLayer));
@@ -737,6 +766,7 @@ function visible(s){
   if(state.car<CAR_MAX && (!s.c1 || s.c1>state.car)) return false;
   if(state.train<TRAIN_MAX && (!s.t1 || s.t1>state.train)) return false;
   if(state.rainOnly && !['◎','○'].includes(s.rain)) return false;
+  if(state.month && !(s.months || []).includes(state.month)) return false;
   return true;
 }
 function setTooltip(s){
@@ -780,7 +810,9 @@ function render(){
       <span class="mt">車${s.c1||'–'}分</span>
       <span class="sub">${esc(s.cat)}・${esc(s.addr)}${s.rain?'・雨'+s.rain:''}</span>
     </button>`).join('')
-    : `<p class="empty">条件に合うスポットがありません。所要時間をゆるめるか、カテゴリを追加してください。</p>`;
+    : `<p class="empty">条件に合うスポットがありません。${
+        state.month ? state.month + '月がおすすめのスポットだけに絞っています。月を「指定なし」に戻すか、' : ''
+      }所要時間をゆるめるか、カテゴリを追加してください。</p>`;
 }
 el('list').addEventListener('click',e=>{
   const b = e.target.closest('.item'); if(!b) return;
@@ -890,6 +922,7 @@ function setRegion(id, moveMap){
     b.setAttribute('aria-pressed', String(b.dataset.region === region.id)));
   el('ringLbl').textContent = HOME.name + 'からの距離の輪';
   el('total').textContent = regionSpots().length;
+  syncMonth();
   drawHome();
   render();
   if(moveMap) fitRegion();
