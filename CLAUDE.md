@@ -3,6 +3,8 @@
 おひさまマップ（家族のお出かけ記録）。個人用の1枚もののウェブアプリで、Cloudflare Workers に置く
 （静的アセット + `src/index.js`。Pages ではない）。
 何をするものか・どう公開するかは README.md に書いてある。ここは作業するときの決まりごとだけ。
+引き継ぎ（現状・Cloudflare側の設定・踏んだ落とし穴・残課題）は docs/HANDOVER.md、
+台帳の列とカテゴリの一覧は docs/LEDGER.md。
 
 ## 作りの前提
 
@@ -34,7 +36,7 @@ Pages用の `pages_build_output_dir` を書くとデプロイが入口を見つ�
 - **地域（`data/regions.json`）が一番上の区切り**。スポットは必ずどれか1つに属する。
   `center` が起点で、所要時間の基準であり距離の輪の中心。地域を足すときは
   スポット側の `region` と、その地域の起点から測り直した `t1/t2/c1/c2` が要る。
-  台帳からの取り込みは `scripts/import-ledger.py`（要 openpyxl）
+  台帳からの取り込みは `scripts/import-ledger.py`（要 openpyxl。列の仕様は docs/LEDGER.md）
 - **地域どうしは重なってよい**。同時に表示しないので、同じ施設が別IDで両方に入っていてよい
   （小田原と関東で14件）。座標が同じかどうかを見るのも地域の中だけ。
   ただし記録はIDで持つので、両方に入れた施設の記録は共有されない
