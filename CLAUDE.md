@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-家族お出かけマップ。個人用の1枚もののウェブアプリで、Cloudflare Workers に置く
+おひさまマップ（家族のお出かけ記録）。個人用の1枚もののウェブアプリで、Cloudflare Workers に置く
 （静的アセット + `src/index.js`。Pages ではない）。
 何をするものか・どう公開するかは README.md に書いてある。ここは作業するときの決まりごとだけ。
 
