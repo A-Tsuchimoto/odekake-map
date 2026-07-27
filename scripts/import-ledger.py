@@ -1,0 +1,245 @@
+#!/usr/bin/env python3
+"""Excelの台帳から1地域分のスポットを data/spots.json に取り込む。
+
+    python3 scripts/import-ledger.py <台帳.xlsx> --region odawara [--pref 神奈川県]
+
+指定した region のスポットを台帳の中身で丸ごと入れ替える。他の地域は触らない。
+region は data/regions.json に先に足しておくこと（起点と距離の輪はそちら）。
+
+取り込んだあとは必ず:
+    npm run build:spots && npm run check
+
+台帳ごとに列名やカテゴリ表記が微妙に違うので、その吸収はここでやる。
+openpyxl が要る（pip install openpyxl）。アプリ本体には影響しない開発用の道具。
+"""
+import argparse, json, re, sys, warnings
+from pathlib import Path
+
+warnings.filterwarnings("ignore", module="openpyxl")   # 台帳の書式設定に出る警告は無害
+
+try:
+    import openpyxl
+except ImportError:
+    sys.exit("openpyxl が要ります: pip install openpyxl")
+
+ROOT = Path(__file__).resolve().parent.parent
+SPOTS = ROOT / "data" / "spots.json"
+REGIONS = ROOT / "data" / "regions.json"
+
+# 台帳ごとに表記がぶれるので、11分類の正しい名前に寄せる
+CANON = {
+    "科学館系": "科学館・博物館",
+    "科学館・博物館": "科学館・博物館",
+    "水族館": "水族館・水辺の生き物",
+    "水族館・水辺の生き物": "水族館・水辺の生き物",
+    "水族館・海の生き物": "水族館・水辺の生き物",
+    "海・港・砂浜": "海・砂浜・岬",
+    "海・ビーチ・岬": "海・砂浜・岬",
+    "海・砂浜・岬": "海・砂浜・岬",
+    "川・湖・ダム": "川・湖・滝・ダム",
+    "川・滝・ダム・マングローブ": "川・湖・滝・ダム",
+    "川・湖・滝・ダム": "川・湖・滝・ダム",
+    "森・里山": "森・里山",
+    "山・ハイキング": "山・ハイキング",
+    "大型公園": "大型公園",
+    "牧場・農業体験": "牧場・農業体験",
+    "アスレチック": "アスレチック",
+    "遊園地": "遊園地",
+    "テーマパーク": "テーマパーク",
+}
+
+# 列名のゆれ。左が使いたい意味、右が台帳で見かける名前
+ALIAS = {
+    "id": ["ID"],
+    "cat": ["大カテゴリ"],
+    "sub": ["小カテゴリ"],
+    "name": ["施設・スポット", "施設名"],
+    "addr": ["所在地", "所在地・代表住所"],
+    "t1": ["電車_最短分", "公共交通_最短分"],
+    "t2": ["電車_最長分", "公共交通_最長分"],
+    "c1": ["車_最短分"],
+    "c2": ["車_最長分"],
+    "rain": ["雨天対応"],
+    "desc": ["概要"],
+    "age": ["おすすめ年齢"],
+    "rate": ["GoogleMaps評価"],
+    "note": ["注意・組み合わせ"],
+    "url": ["公式URL"],
+    "lat": ["緯度"],
+    "lng": ["経度"],
+    "season": ["特におすすめな月"],
+}
+# 区まで残す市（政令指定都市）。ここに無い市の「◯◯区」は地区名なので落とす
+SEIREI = {"札幌市", "仙台市", "さいたま市", "千葉市", "横浜市", "川崎市", "相模原市",
+          "新潟市", "静岡市", "浜松市", "名古屋市", "京都市", "大阪市", "堺市",
+          "神戸市", "岡山市", "広島市", "北九州市", "福岡市", "熊本市"}
+# 「◯◯市市」と続く市。次の字が市でも伸ばす
+DOUBLE_CITY = {"四日市", "廿日市"}
+PREF = r"^(東京都|北海道|京都府|大阪府|.{2,3}?県)"
+
+
+def num(v):
+    if v is None or v == "":
+        return None
+    try:
+        f = float(str(v).strip())
+    except ValueError:
+        return None
+    return int(f) if f == int(f) else f
+
+
+def txt(v):
+    if v is None:
+        return None
+    s = str(v).strip()
+    return s or None
+
+
+def months(text):
+    """「4月・10～11月（花・紅葉）」→ [4,10,11]。「11～4月」のような年またぎも拾う"""
+    if not text:
+        return []
+    got = set()
+    for a, b in re.findall(r"(\d{1,2})\s*(?:[～〜~ー-]\s*(\d{1,2}))?\s*月", str(text)):
+        s = int(a)
+        e = int(b) if b else s
+        if not (1 <= s <= 12 and 1 <= e <= 12):
+            continue
+        m = s
+        while True:
+            got.add(m)
+            if m == e:
+                break
+            m = m % 12 + 1
+    return sorted(got)
+
+
+def area(addr, pref):
+    """住所を「都道府県＋市区町村」まで詰める。一覧に出るので番地は落とす。
+
+    素直に書くと地名に引っかかる。「余市町」は余市で、「豊川市市田町」は豊川市市で、
+    「市原市」は市で止まってしまう。郡を先に見て、政令市だけ区を残し、
+    「〜市市」になる市だけ例外として持つ。"""
+    if not addr:
+        return pref or ""
+    a, head_pref = addr, (pref or "")
+    m = re.match(PREF + r"(.+)$", a)
+    if m:
+        head_pref, a = m.group(1), m.group(2)
+
+    m = re.match(r"^(.{1,8}?郡)(.{1,8}?[町村])", a)
+    if m:
+        return head_pref + m.group(1) + m.group(2)
+
+    m = re.match(r"^(.{1,8}?[市町村])", a)
+    if not m:
+        return head_pref + a
+    head, rest = m.group(1), a[len(m.group(1)):]
+    if rest[:1] in ("町", "村") or (rest[:1] == "市" and head in DOUBLE_CITY):
+        head, rest = head + rest[0], rest[1:]
+    if head in SEIREI:
+        m2 = re.match(r"^(.{1,6}?区)", rest)
+        if m2:
+            head += m2.group(1)
+    return head_pref + head
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("xlsx")
+    ap.add_argument("--region", required=True, help="data/regions.json にある地域のid")
+    ap.add_argument("--pref", default="", help="台帳の住所に都道府県が無いときに前へ付ける")
+    ap.add_argument("--sheet", default="全スポット")
+    args = ap.parse_args()
+
+    regions = json.loads(REGIONS.read_text(encoding="utf-8"))
+    if args.region not in {r["id"] for r in regions}:
+        sys.exit(f"data/regions.json に地域 '{args.region}' がない。先に足すこと")
+
+    wb = openpyxl.load_workbook(args.xlsx, data_only=True)
+    if args.sheet not in wb.sheetnames:
+        sys.exit(f"シート '{args.sheet}' が無い。あるのは {wb.sheetnames}")
+    rows = list(wb[args.sheet].iter_rows(values_only=True))
+    head = {h: i for i, h in enumerate(rows[0]) if h}
+
+    col = {}
+    for key, names in ALIAS.items():
+        for n in names:
+            if n in head:
+                col[key] = head[n]
+                break
+    for req in ("id", "cat", "name", "lat", "lng"):
+        if req not in col:
+            sys.exit(f"必要な列が見つからない: {ALIAS[req]}")
+    get = lambda r, k: r[col[k]] if k in col else None
+
+    spots, problems = [], []
+    for r in rows[1:]:
+        if not get(r, "id"):
+            continue
+        cat = txt(get(r, "cat"))
+        if cat not in CANON:
+            problems.append(f"知らないカテゴリ: {cat}（{txt(get(r, 'name'))}）")
+            continue
+        o = {
+            "id": txt(get(r, "id")),
+            "cat": CANON[cat],
+            "sub": txt(get(r, "sub")),
+            "name": txt(get(r, "name")),
+            "addr": area(txt(get(r, "addr")), args.pref),
+            "t1": num(get(r, "t1")), "t2": num(get(r, "t2")),
+            "c1": num(get(r, "c1")), "c2": num(get(r, "c2")),
+            "rain": txt(get(r, "rain")),
+            "desc": txt(get(r, "desc")),
+            "age": txt(get(r, "age")),
+            "rate": num(get(r, "rate")) or None,   # 0 と未確認は入れない
+            "note": txt(get(r, "note")),
+            "url": txt(get(r, "url")),
+            "lat": num(get(r, "lat")), "lng": num(get(r, "lng")),
+            "region": args.region,
+        }
+        season = txt(get(r, "season"))
+        if season:
+            ms = months(season)
+            if ms:
+                o["season"], o["months"] = season, ms
+            else:
+                problems.append(f"月を読み取れない: {o['id']} {season}")
+        spots.append({k: v for k, v in o.items() if v is not None})
+
+    if problems:
+        print("!! 確認が要るもの:")
+        for p in problems:
+            print("   ", p)
+
+    cur = json.loads(SPOTS.read_text(encoding="utf-8"))
+    others = [s for s in cur if s["region"] != args.region]
+    clash = {s["id"] for s in spots} & {s["id"] for s in others}
+    if clash:
+        sys.exit(f"IDが他の地域とぶつかっている: {sorted(clash)[:5]}")
+
+    # 同じ座標だとピンが重なってタップできない。ずらすのは同じ地域の中だけ。
+    # 地域が違えば同時に表示しないので、隣の地域と同じ座標でも困らない。
+    seen = {}
+    for s in spots:
+        key = (s["lat"], s["lng"])
+        if key in seen:
+            s["lat"] = round(s["lat"] + 0.00045, 6)   # 約50m北
+            print(f"  座標が重複: {s['id']} {s['name']} ← {seen[key]}。50mずらした")
+        seen[(s["lat"], s["lng"])] = s["id"]
+
+    allspots = others + spots
+    with SPOTS.open("w", encoding="utf-8") as f:
+        f.write("[\n")
+        f.write(",\n".join(json.dumps(s, ensure_ascii=False) for s in allspots))
+        f.write("\n]\n")
+
+    withm = sum(1 for s in spots if s.get("months"))
+    withr = sum(1 for s in spots if s.get("rate"))
+    print(f"{args.region}: {len(spots)}件を取り込んだ（評価 {withr}件 / おすすめ月 {withm}件）")
+    print(f"住所の例: {sorted({s['addr'] for s in spots})[:6]}")
+    print(f"合計 {len(allspots)}件。npm run build:spots && npm run check を忘れずに")
+
+
+if __name__ == "__main__":
+    main()

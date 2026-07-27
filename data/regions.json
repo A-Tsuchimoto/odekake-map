@@ -1,5 +1,7 @@
 [
 {"id":"kanto","name":"関東","center":{"name":"高田駅","lat":35.5496391,"lng":139.620117},"rings":[10,20,30,40]},
 {"id":"okinawa","name":"沖縄","center":{"name":"県庁前駅","lat":26.214387,"lng":127.679357},"rings":[10,25,50,75]},
-{"id":"hokkaido","name":"北海道","center":{"name":"札幌駅","lat":43.068329,"lng":141.350949},"rings":[10,25,50,100]}
+{"id":"hokkaido","name":"北海道","center":{"name":"札幌駅","lat":43.068329,"lng":141.350949},"rings":[10,25,50,100]},
+{"id":"odawara","name":"小田原","center":{"name":"小田原駅","lat":35.2562,"lng":139.1553},"rings":[5,10,20,30]},
+{"id":"nagoya","name":"名古屋","center":{"name":"名古屋駅","lat":35.170694,"lng":136.881637},"rings":[10,25,50,75]}
 ]

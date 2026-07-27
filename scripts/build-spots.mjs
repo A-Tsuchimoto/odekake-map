@@ -101,7 +101,10 @@ for (const s of spots) {
         fail(`${at}: ${r.name}の起点から ${Math.round(d)}km。region の付け間違いか座標の誤り`);
       }
     }
-    const key = `${s.lat},${s.lng}`;
+    /* 同じ座標だとピンが重なってタップできない。ただし見るのは同じ地域の中だけ。
+       地域は同時に表示しないので、隣の地域と同じ施設が同じ座標にあっても困らない
+       （小田原と関東で14件重なっている） */
+    const key = `${s.region}|${s.lat},${s.lng}`;
     if (seenPos.has(key)) fail(`${at}: ${seenPos.get(key)} と座標が同じ。50mほどずらすこと`);
     else seenPos.set(key, at);
   }
