@@ -30,6 +30,7 @@
 --focus:#1D7FD6;
 --shadow:0 6px 24px rgba(16,34,46,.16);
 --sans:"Zen Kaku Gothic New","Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic",system-ui,sans-serif;
+--pf:1;
 }
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
@@ -125,6 +126,9 @@ background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .15s;
 width:100%;text-align:left;border:0;background:none;font:inherit;cursor:pointer;
 padding:8px 15px;display:grid;grid-template-columns:10px 1fr auto;gap:9px;align-items:baseline;
 border-top:1px solid var(--line);
+/* 一覧は数百件になる。画面の外にある行の組版はブラウザに省いてもらう。
+   これが無いと、地域を切り替えるたびに全行のレイアウトで200msほど固まる */
+content-visibility:auto;contain-intrinsic-size:auto 48px;
 }
 .item:hover,.item:focus-visible{background:#F4F7F6;outline:none}
 .item .bar{width:4px;height:100%;min-height:22px;border-radius:2px;background:var(--c);grid-row:span 2}
@@ -172,27 +176,29 @@ height:5px;border-radius:3px;background:var(--line);overflow:hidden;margin:8px 0
 }
 .progress i{display:block;height:100%;background:#1F7A4D;width:0;transition:width .3s}
 .rec{border-top:1px solid var(--line);margin-top:10px;padding-top:10px}
-.rec .today{width:100%;margin-bottom:8px;padding:9px;font-size:12.5px}
+.rec .today{width:100%;margin-bottom:8px;padding:calc(9px * var(--pf));font-size:calc(12.5px * var(--pf))}
 .rec .today.done{background:#1F7A4D;border-color:#1F7A4D}
 .st-row{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:9px}
 .st{
-font:inherit;font-size:10.5px;font-weight:700;padding:4px 8px;border-radius:99px;cursor:pointer;
+font:inherit;font-size:calc(10.5px * var(--pf));font-weight:700;border-radius:99px;cursor:pointer;
+padding:calc(4px * var(--pf)) calc(8px * var(--pf));
 border:1px solid var(--line);background:#fff;color:var(--ink-70);
 }
 .st[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff}
-.rec label{display:block;font-size:10px;letter-spacing:.1em;font-weight:700;color:var(--ink-45);margin:0 0 3px}
+.rec label{display:block;font-size:calc(10px * var(--pf));letter-spacing:.1em;font-weight:700;color:var(--ink-45);margin:0 0 3px}
 .rec input[type=date],.rec textarea,.rec input[type=text]{
-font:inherit;font-size:12px;width:100%;padding:6px 8px;border-radius:7px;
+font:inherit;font-size:calc(12px * var(--pf));width:100%;border-radius:7px;
+padding:calc(6px * var(--pf)) calc(8px * var(--pf));
 border:1px solid var(--line);background:#F8FAF9;color:var(--ink);margin-bottom:8px;resize:vertical;
 }
 .rec input:focus-visible,.rec textarea:focus-visible,.st:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
 .stars{display:flex;gap:2px;margin-bottom:9px}
 .star{
-font:inherit;font-size:17px;line-height:1;border:0;background:none;cursor:pointer;padding:1px 2px;
+font:inherit;font-size:calc(17px * var(--pf));line-height:1;border:0;background:none;cursor:pointer;padding:1px 2px;
 color:var(--line);
 }
 .star.lit{color:#F0B429}
-.saved{font-size:10px;color:#1F7A4D;font-weight:700;height:13px;margin:0 0 6px;opacity:0;transition:opacity .2s}
+.saved{font-size:calc(10px * var(--pf));color:#1F7A4D;font-weight:700;height:calc(13px * var(--pf));margin:0 0 6px;opacity:0;transition:opacity .2s}
 .saved.show{opacity:1}
 .home{
 width:17px;height:17px;border-radius:50%;background:var(--ink);
@@ -212,27 +218,30 @@ font-size:10px;font-weight:700;letter-spacing:.1em;padding:0;
 .leaflet-popup-content-wrapper{border-radius:12px;box-shadow:var(--shadow);padding:0;overflow:hidden}
 /* 中身が画面に収まらないときはポップアップの中でスクロールさせる。
    overscroll-behavior で、端まで行っても地図側が動かないようにしておく */
+/* --pf はポップアップの拡大率。パネルの「ポップアップの大きさ」で切り替える。
+   小さい字が読みづらいときのために、幅と文字を一緒に伸ばす */
 .leaflet-popup-content{
-margin:0;width:264px!important;line-height:1.5;
+margin:0;line-height:1.5;
+width:calc(264px * var(--pf))!important;max-width:calc(100vw - 40px);
 max-height:min(68vh,520px);overflow-y:auto;overscroll-behavior:contain;
 -webkit-overflow-scrolling:touch;
 }
-.pop-top{padding:12px 14px 10px;color:#fff;position:sticky;top:0;z-index:1}
-.pop-cat{font-size:9.5px;letter-spacing:.13em;font-weight:700;opacity:.85}
-.pop-nm{font-size:15px;font-weight:900;margin-top:3px;line-height:1.3}
-.pop-body{padding:11px 14px 13px;font-size:12px}
-.facts{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin:0 0 9px;font-size:11.5px}
+.pop-top{padding:calc(12px * var(--pf)) calc(14px * var(--pf)) calc(10px * var(--pf));color:#fff;position:sticky;top:0;z-index:1}
+.pop-cat{font-size:calc(9.5px * var(--pf));letter-spacing:.13em;font-weight:700;opacity:.85}
+.pop-nm{font-size:calc(15px * var(--pf));font-weight:900;margin-top:3px;line-height:1.3}
+.pop-body{padding:calc(11px * var(--pf)) calc(14px * var(--pf)) calc(13px * var(--pf));font-size:calc(12px * var(--pf))}
+.facts{display:grid;grid-template-columns:auto 1fr;gap:3px calc(10px * var(--pf));margin:0 0 9px;font-size:calc(11.5px * var(--pf))}
 .facts dt{color:var(--ink-45);font-weight:700;white-space:nowrap}
 .facts dd{margin:0;font-variant-numeric:tabular-nums}
-.pop-body p{margin:0 0 8px;color:var(--ink-70);font-size:11.5px}
+.pop-body p{margin:0 0 8px;color:var(--ink-70);font-size:calc(11.5px * var(--pf))}
 .pop-note{
 background:#F4F7F6;border-left:3px solid var(--line);
-padding:6px 9px;font-size:11px;color:var(--ink-70);margin:0 0 10px;border-radius:0 5px 5px 0;
+padding:6px 9px;font-size:calc(11px * var(--pf));color:var(--ink-70);margin:0 0 10px;border-radius:0 5px 5px 0;
 }
 .links{display:flex;gap:7px}
 .links a{
-flex:1;text-align:center;text-decoration:none;font-size:11.5px;font-weight:700;
-padding:7px 4px;border-radius:7px;border:1px solid var(--line);color:var(--ink);
+flex:1;text-align:center;text-decoration:none;font-size:calc(11.5px * var(--pf));font-weight:700;
+padding:calc(7px * var(--pf)) 4px;border-radius:7px;border:1px solid var(--line);color:var(--ink);
 }
 .links a.pri{background:var(--ink);color:#fff;border-color:var(--ink)}
 .links a:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
@@ -261,7 +270,7 @@ font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;color:var(--ink);
 content:"";position:absolute;top:7px;left:50%;transform:translateX(-50%);
 width:34px;height:4px;border-radius:2px;background:var(--line);
 }
-.leaflet-popup-content{width:238px!important;max-height:min(58vh,420px)}
+.leaflet-popup-content{width:calc(238px * var(--pf))!important;max-width:calc(100vw - 32px);max-height:min(58vh,420px)}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -318,6 +327,13 @@ width:34px;height:4px;border-radius:2px;background:var(--line);
       <p class="hint" id="monthHint"></p>
       <div class="row"><label for="rain">雨の日でも行ける（◎○）</label><button class="toggle" id="rain" aria-pressed="false"></button></div>
       <div class="row"><label for="names">施設名を地図に表示</label><button class="toggle" id="names" aria-pressed="false"></button></div>
+      <p class="hint" id="nameHint"></p>
+      <div class="row"><label for="popSize">ポップアップの大きさ</label>
+        <select id="popSize">
+          <option value="1">標準</option>
+          <option value="1.25">大きめ</option>
+          <option value="1.5">特大</option>
+        </select></div>
       <div class="row"><label for="rings" id="ringLbl">起点からの距離の輪</label><button class="toggle" id="rings" aria-pressed="true"></button></div>
     </div>
     <div class="block list">
@@ -397,7 +413,8 @@ const store = {
 const map = L.map('map',{zoomControl:false, minZoom:8, maxZoom:17}).setView([35.50,139.62],10);
 L.control.zoom({position:'bottomright'}).addTo(map);
 const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
-  attribution:'&copy; OpenStreetMap contributors &copy; CARTO', subdomains:'abcd', maxZoom:19
+  attribution:'&copy; OpenStreetMap contributors &copy; CARTO', subdomains:'abcd', maxZoom:19,
+  updateWhenZooming:false, keepBuffer:3
 }).addTo(map);
 let tileFails = 0;
 tiles.on('tileerror', ()=>{
@@ -436,12 +453,21 @@ const layer = L.layerGroup().addTo(map);
    ポップアップも一緒に閉じてしまう。記録を書くたびに render() が走るので、
    増えた分・減った分だけ動かす。render() より先に呼ばれるのでここで用意する */
 const onMap = new Set();
+
+/* 描画は1フレームに1回にまとめる。スライダーを動かすと input が何十回も飛ぶので、
+   そのたびに描き直すと重くなる。render() は予約だけして、実体は draw()。
+   ここの変数も render() より先に用意しておくこと（宣言前に呼ぶと落ちる） */
+let frame = 0;
+/* 一覧の組み直しが一番高い（183件で5ms＋レイアウト）。中身が変わったときだけにする */
+let listSig = null;
+const listShown = () => window.innerWidth > 720 || el('panel').classList.contains('open');
+const LABEL_MAX = 60;   /* 地図に出す施設名の上限 */
 SPOTS.forEach(s=>{
   const c = COLORS[s.cat] || '#666';
   s.color = c;
   s.marker = L.marker([s.lat,s.lng],{icon:pinIcon(s), title:s.name});
   s.marker.bindTooltip(s.name,{direction:'top',offset:[0,-8],className:'nm-tip'});
-  s.marker.bindPopup(()=>popup(s),{maxWidth:280,autoPanPadding:[24,70]});
+  s.marker.bindPopup(()=>popup(s),{maxWidth:480,autoPanPadding:[24,70]});
 });
 
 const gmapUrl = s => 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(s.name);
@@ -754,6 +780,32 @@ function syncMonth(){
     : 'この地域はまだ月の情報がありません';
 }
 
+/* ポップアップの大きさ。字が小さくて読みづらいときに幅ごと拡大する。
+   CSSの --pf を変えるだけで、中の文字も余白も一緒に伸びる */
+const PKEY = 'outing-popsize-v1';
+function setPopSize(v, save){
+  const f = [1, 1.25, 1.5].includes(+v) ? +v : 1;
+  document.documentElement.style.setProperty('--pf', f);
+  el('popSize').value = String(f);
+  if(save) store.set(PKEY, String(f));
+  /* 開いたままなら、新しい大きさに合わせて位置を取り直す。
+     update() は中身を作り直すので、書きかけのメモを預けて、ボタンをつなぎ直す */
+  const open = map._popup;
+  if(open && open.isOpen()){
+    const before = open.getElement().querySelector('textarea');
+    const memo = before ? before.value : null;
+    open.update();
+    const root = open.getElement().querySelector('.rec');
+    if(root){
+      const after = root.querySelector('textarea');
+      if(after && memo != null) after.value = memo;
+      wireRec(root);
+    }
+  }
+}
+el('popSize').addEventListener('change', e => setPopSize(e.target.value, true));
+(async ()=>{ const v = await store.get(PKEY); if(v) setPopSize(v, false); })();
+
 bindToggle('rain', on=>{state.rainOnly=on; render();});
 bindToggle('names', on=>{state.names=on; render();});
 bindToggle('rings', on=> on ? ringLayer.addTo(map) : map.removeLayer(ringLayer));
@@ -769,23 +821,48 @@ function visible(s){
   if(state.month && !(s.months || []).includes(state.month)) return false;
   return true;
 }
-function setTooltip(s){
+/* 名前のラベルは、常時表示にすると1つずつDOMを作るので数が効く。
+   画面に入っているものだけ常時表示にして、外のものはホバー時だけにする。
+   183件を一度に常時表示すると400ms近く固まっていた */
+function setTooltip(s, permanent){
   s.marker.unbindTooltip();
-  s.marker.bindTooltip(s.name, state.names
+  s.marker.bindTooltip(s.name, permanent
     ? {permanent:true,direction:'right',offset:[9,0],className:'nm-tip'}
     : {direction:'top',offset:[0,-8],className:'nm-tip'});
-  s.tipNames = state.names;
+  s.tipPerm = permanent;
 }
+
 function render(){
+  if(frame) return;
+  frame = requestAnimationFrame(()=>{ frame = 0; draw(); });
+}
+function draw(){
   const vis = SPOTS.filter(visible).sort((a,b)=>(a.c1||999)-(b.c1||999));
   const keep = new Set(vis.map(s=>s.id));
   SPOTS.forEach(s=>{
     if(onMap.has(s.id) && !keep.has(s.id)){ layer.removeLayer(s.marker); onMap.delete(s.id); }
   });
+  /* 名前のラベルは1つずつDOMを作るので、数が増えると重い。しかも一面に出ると読めない。
+     画面に入っているものの、地図の中心に近い順に LABEL_MAX 件までにする。
+     拡大すれば画面内の数が減るので、その分だけ名前が増える */
+  let labels = null, capped = false;
+  if(state.names){
+    const box = map.getBounds().pad(0.2), c = map.getCenter();
+    const cand = vis.filter(s => box.contains(s.marker.getLatLng()));
+    capped = cand.length > LABEL_MAX;
+    if(capped){
+      cand.sort((a,b) => c.distanceTo(a.marker.getLatLng()) - c.distanceTo(b.marker.getLatLng()));
+      cand.length = LABEL_MAX;
+    }
+    labels = new Set(cand.map(s => s.id));
+  }
   vis.forEach(s=>{
     if(!onMap.has(s.id)){ s.marker.addTo(layer); onMap.add(s.id); }
-    if(s.tipNames !== state.names) setTooltip(s);
+    const perm = !!(labels && labels.has(s.id));
+    if(s.tipPerm !== perm) setTooltip(s, perm);
   });
+  el('nameHint').textContent = capped
+    ? `名前は中心に近い${LABEL_MAX}件まで。拡大すると増えます` : '';
   el('shown').textContent = vis.length;
 
   /* 件数・状況・進み具合は、今見ている地域の中だけで数える */
@@ -802,6 +879,12 @@ function render(){
   });
   el('bar').style.width = (mine.length ? cnt['訪問済み'] / mine.length * 100 : 0) + '%';
 
+  /* 並びと状況が同じなら組み直さない。スマホでシートを閉じている間も作らない */
+  const sig = vis.map(s => s.id + statusOf(s)).join();
+  if(!listShown()){ listSig = null; return; }
+  if(sig === listSig) return;
+  listSig = sig;
+
   el('list').innerHTML = vis.length ? vis.map(s=>`
     <button class="item" data-id="${s.id}" style="--c:${s.color}">
       <span class="bar"></span><span class="nm">${
@@ -814,6 +897,13 @@ function render(){
         state.month ? state.month + '月がおすすめのスポットだけに絞っています。月を「指定なし」に戻すか、' : ''
       }所要時間をゆるめるか、カテゴリを追加してください。</p>`;
 }
+/* 画面外に出たラベルを外し、入ってきたものに付ける */
+map.on('moveend', ()=>{ if(state.names) render(); });
+
+/* 横向きにするとパネルがシートから横置きに変わる。閉じている間は一覧を作っていないので、
+   幅が変わったら作り直す */
+window.addEventListener('resize', ()=>{ listSig = null; render(); });
+
 el('list').addEventListener('click',e=>{
   const b = e.target.closest('.item'); if(!b) return;
   const s = SPOTS.find(x=>x.id===b.dataset.id);
@@ -845,8 +935,9 @@ const today = ()=>{
   const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
   return d.toISOString().slice(0,10);
 };
-map.on('popupopen', ev=>{
-  const root = ev.popup.getElement().querySelector('.rec'); if(!root) return;
+/* ポップアップの中身は開くたびに作り直されるので、そのつどボタンをつなぎ直す。
+   大きさを変えたときも中身が作り直されるため、そこからも呼ぶ */
+function wireRec(root){
   const id = root.dataset.id;
 
   root.querySelector('[data-today]').addEventListener('click',()=>{
@@ -885,6 +976,17 @@ map.on('popupopen', ev=>{
     inp.addEventListener('change',()=>{ set(id, inp.dataset.f, inp.value.trim()); flash(root); });
   });
   root.querySelector('textarea').addEventListener('keydown', e => e.stopPropagation());
+}
+map.on('popupopen', ev=>{
+  /* 左のパネル（スマホでは下のシート）に隠れないところまで地図を動かす。
+     大きさを上げると隠れやすいので、そのぶん余白も広く取る */
+  const wide = window.innerWidth > 720;
+  ev.popup.options.autoPanPaddingTopLeft = L.point(wide ? 336 : 20, 80);
+  ev.popup.options.autoPanPaddingBottomRight = L.point(20, wide ? 24 : 70);
+  ev.popup._adjustPan();
+
+  const root = ev.popup.getElement().querySelector('.rec');
+  if(root) wireRec(root);
 });
 
 /* mobile sheet */
@@ -892,6 +994,7 @@ el('sheetBtn').addEventListener('click',()=>{
   const p = el('panel'), open = p.classList.toggle('open');
   el('sheetBtn').setAttribute('aria-expanded',String(open));
   el('sheetBtn').textContent = open ? '閉じる' : '絞り込みと一覧';
+  if(open) render();   /* 閉じている間は一覧を作っていないので、開いたときに作る */
 });
 
 /* ---- 地域の切り替え ---- */
