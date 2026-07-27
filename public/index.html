@@ -226,7 +226,28 @@ width:calc(264px * var(--pf))!important;max-width:calc(100vw - 40px);
 max-height:min(68vh,520px);overflow-y:auto;overscroll-behavior:contain;
 -webkit-overflow-scrolling:touch;
 }
-.pop-top{padding:calc(12px * var(--pf)) calc(14px * var(--pf)) calc(10px * var(--pf));color:#fff;position:sticky;top:0;z-index:1}
+.pop-top{
+padding:calc(12px * var(--pf)) calc(14px * var(--pf)) calc(10px * var(--pf));
+padding-right:calc(78px * var(--pf));   /* 右上の拡大ボタンと文字が重ならないように */
+color:#fff;position:sticky;top:0;z-index:1;
+}
+/* 見出しの中の拡大ボタン。パネルの奥まで探しに行かなくて済むよう、ここに置く。
+   あとに続く見出しの下敷きにならないよう z-index を上げる */
+.pop-zoom{position:absolute;top:6px;right:8px;display:flex;gap:4px;z-index:2}
+.pop-zoom button{
+font:inherit;font-size:calc(11px * var(--pf));font-weight:900;line-height:1;
+color:#fff;background:rgba(255,255,255,.22);border:1px solid rgba(255,255,255,.45);
+border-radius:6px;padding:calc(3px * var(--pf)) calc(6px * var(--pf));cursor:pointer;
+}
+.pop-zoom button:disabled{opacity:.35;cursor:default}
+.pop-zoom button:focus-visible{outline:2px solid #fff;outline-offset:1px}
+/* 座標の無いスポットを一覧の中で開くカード。中身はポップアップと同じ */
+.card{
+border-top:1px solid var(--line);background:#F8FAF9;
+box-shadow:inset 0 1px 6px rgba(16,34,46,.06);
+}
+.card .pop-top{position:static}
+.badge.nopos{background:#E3E8E7;color:var(--ink-45)}
 .pop-cat{font-size:calc(9.5px * var(--pf));letter-spacing:.13em;font-weight:700;opacity:.85}
 .pop-nm{font-size:calc(15px * var(--pf));font-weight:900;margin-top:3px;line-height:1.3}
 .pop-body{padding:calc(11px * var(--pf)) calc(14px * var(--pf)) calc(13px * var(--pf));font-size:calc(12px * var(--pf))}
@@ -381,7 +402,8 @@ const COLORS = {
   "牧場・農業体験":"#C98A14",
   "アスレチック":"#E2661A",
   "遊園地":"#E24A87",
-  "テーマパーク":"#D33B3B"
+  "テーマパーク":"#D33B3B",
+  "飲食店":"#7E22CE"
 };
 const ORDER = Object.keys(COLORS);
 const active = new Set(ORDER);
@@ -460,11 +482,16 @@ const onMap = new Set();
 let frame = 0;
 /* 一覧の組み直しが一番高い（183件で5ms＋レイアウト）。中身が変わったときだけにする */
 let listSig = null;
+let cardId = null;   /* 一覧の中に開いているカードのスポットID */
 const listShown = () => window.innerWidth > 720 || el('panel').classList.contains('open');
 const LABEL_MAX = 60;   /* 地図に出す施設名の上限 */
+/* 座標が無いスポットもある（飲食店の台帳は緯度経度が空）。
+   地図には出せないので、マーカーを作らず一覧だけに出す */
+const onMapAble = s => typeof s.lat === 'number' && typeof s.lng === 'number';
 SPOTS.forEach(s=>{
   const c = COLORS[s.cat] || '#666';
   s.color = c;
+  if(!onMapAble(s)) return;
   s.marker = L.marker([s.lat,s.lng],{icon:pinIcon(s), title:s.name});
   s.marker.bindTooltip(s.name,{direction:'top',offset:[0,-8],className:'nm-tip'});
   s.marker.bindPopup(()=>popup(s),{maxWidth:480,autoPanPadding:[24,70]});
@@ -503,8 +530,13 @@ function popup(s){
   const sts = SORDER.map(k =>
     `<button class="st" data-st="${k}" aria-pressed="${k===sv}">${STATUS[k].label}</button>`).join('');
 
+  const size = +((typeof el === 'function' && el('popSize')) ? el('popSize').value : 1);
   return `
   <div class="pop-top" style="background:${s.color}">
+    <div class="pop-zoom">
+      <button data-pz="-" aria-label="表示を小さくする"${size <= PSIZES[0] ? ' disabled' : ''}>A−</button>
+      <button data-pz="+" aria-label="表示を大きくする"${size >= PSIZES[PSIZES.length-1] ? ' disabled' : ''}>A＋</button>
+    </div>
     <div class="pop-cat">${esc(s.cat)}${s.sub?' ／ '+esc(s.sub):''}</div>
     <div class="pop-nm">${esc(s.name)}</div>
   </div>
@@ -698,7 +730,7 @@ el('file').onchange = e=>{
   e.target.value = '';
 };
 function refreshMarkers(){
-  SPOTS.forEach(s => s.marker.setIcon(pinIcon(s)));
+  SPOTS.forEach(s => { if(s.marker) s.marker.setIcon(pinIcon(s)); });
   render();
 }
 el('connect').onclick = async ()=>{
@@ -783,8 +815,14 @@ function syncMonth(){
 /* ポップアップの大きさ。字が小さくて読みづらいときに幅ごと拡大する。
    CSSの --pf を変えるだけで、中の文字も余白も一緒に伸びる */
 const PKEY = 'outing-popsize-v1';
+const PSIZES = [1, 1.25, 1.5];
+function nextPopSize(dir){
+  const now = PSIZES.indexOf(+el('popSize').value);
+  const i = Math.min(PSIZES.length - 1, Math.max(0, (now < 0 ? 0 : now) + (dir === '+' ? 1 : -1)));
+  return PSIZES[i];
+}
 function setPopSize(v, save){
-  const f = [1, 1.25, 1.5].includes(+v) ? +v : 1;
+  const f = PSIZES.includes(+v) ? +v : 1;
   document.documentElement.style.setProperty('--pf', f);
   el('popSize').value = String(f);
   if(save) store.set(PKEY, String(f));
@@ -795,13 +833,23 @@ function setPopSize(v, save){
     const before = open.getElement().querySelector('textarea');
     const memo = before ? before.value : null;
     open.update();
-    const root = open.getElement().querySelector('.rec');
-    if(root){
-      const after = root.querySelector('textarea');
-      if(after && memo != null) after.value = memo;
-      wireRec(root);
-    }
+    const root = open.getElement();
+    const after = root.querySelector('textarea');
+    if(after && memo != null) after.value = memo;
+    wirePopup(root);
   }
+  /* 一覧の中に開いているカードも作り直す */
+  el('list').querySelectorAll('.card').forEach(card=>{
+    const item = card.previousElementSibling;
+    const sp = item && SPOTS.find(x => x.id === item.dataset.id);
+    if(!sp) return;
+    const memo = card.querySelector('textarea');
+    const keep = memo ? memo.value : null;
+    card.innerHTML = popup(sp);
+    const after = card.querySelector('textarea');
+    if(after && keep != null) after.value = keep;
+    wirePopup(card);
+  });
 }
 el('popSize').addEventListener('change', e => setPopSize(e.target.value, true));
 (async ()=>{ const v = await store.get(PKEY); if(v) setPopSize(v, false); })();
@@ -838,7 +886,7 @@ function render(){
 }
 function draw(){
   const vis = SPOTS.filter(visible).sort((a,b)=>(a.c1||999)-(b.c1||999));
-  const keep = new Set(vis.map(s=>s.id));
+  const keep = new Set(vis.filter(onMapAble).map(s=>s.id));
   SPOTS.forEach(s=>{
     if(onMap.has(s.id) && !keep.has(s.id)){ layer.removeLayer(s.marker); onMap.delete(s.id); }
   });
@@ -846,9 +894,10 @@ function draw(){
      画面に入っているものの、地図の中心に近い順に LABEL_MAX 件までにする。
      拡大すれば画面内の数が減るので、その分だけ名前が増える */
   let labels = null, capped = false;
+  const pinned = vis.filter(onMapAble);
   if(state.names){
     const box = map.getBounds().pad(0.2), c = map.getCenter();
-    const cand = vis.filter(s => box.contains(s.marker.getLatLng()));
+    const cand = pinned.filter(s => box.contains(s.marker.getLatLng()));
     capped = cand.length > LABEL_MAX;
     if(capped){
       cand.sort((a,b) => c.distanceTo(a.marker.getLatLng()) - c.distanceTo(b.marker.getLatLng()));
@@ -856,7 +905,7 @@ function draw(){
     }
     labels = new Set(cand.map(s => s.id));
   }
-  vis.forEach(s=>{
+  pinned.forEach(s=>{
     if(!onMap.has(s.id)){ s.marker.addTo(layer); onMap.add(s.id); }
     const perm = !!(labels && labels.has(s.id));
     if(s.tipPerm !== perm) setTooltip(s, perm);
@@ -885,17 +934,27 @@ function draw(){
   if(sig === listSig) return;
   listSig = sig;
 
+  /* 開いているカードは節点ごと預かって、組み直したあとに戻す。
+     作り直すと入力中の状態も「保存しました」も消えてしまう */
+  const card = el('list').querySelector('.card');
+  if(card) card.remove();
+
   el('list').innerHTML = vis.length ? vis.map(s=>`
     <button class="item" data-id="${s.id}" style="--c:${s.color}">
       <span class="bar"></span><span class="nm">${
         statusOf(s)!=='候補' ? `<span class="badge ${STATUS[statusOf(s)].tone}">${STATUS[statusOf(s)].label}</span>` : ''
-      }${esc(s.name)}</span>
+      }${onMapAble(s) ? '' : '<span class="badge nopos">地図なし</span>'}${esc(s.name)}</span>
       <span class="mt">車${s.c1||'–'}分</span>
       <span class="sub">${esc(s.cat)}・${esc(s.addr)}${s.rain?'・雨'+s.rain:''}</span>
     </button>`).join('')
     : `<p class="empty">条件に合うスポットがありません。${
         state.month ? state.month + '月がおすすめのスポットだけに絞っています。月を「指定なし」に戻すか、' : ''
       }所要時間をゆるめるか、カテゴリを追加してください。</p>`;
+
+  if(card && cardId){
+    const item = el('list').querySelector(`.item[data-id="${cardId}"]`);
+    if(item) item.after(card); else cardId = null;   /* 絞り込みで消えたら閉じる */
+  }
 }
 /* 画面外に出たラベルを外し、入ってきたものに付ける */
 map.on('moveend', ()=>{ if(state.names) render(); });
@@ -907,6 +966,8 @@ window.addEventListener('resize', ()=>{ listSig = null; render(); });
 el('list').addEventListener('click',e=>{
   const b = e.target.closest('.item'); if(!b) return;
   const s = SPOTS.find(x=>x.id===b.dataset.id);
+  /* 座標が無いスポットは地図に出せないので、一覧の中で開く */
+  if(!onMapAble(s)){ openCard(b, s); return; }
   if(window.innerWidth<=720) el('panel').classList.remove('open');
   map.flyTo([s.lat,s.lng], Math.max(map.getZoom(),13), {duration:.6});
   /* 移動しながら開くと、ポップアップの自動スクロールが移動前の位置で計算されて
@@ -916,6 +977,22 @@ el('list').addEventListener('click',e=>{
   map.once('moveend', open);
   setTimeout(open, 800);
 });
+
+/* 座標の無いスポットを一覧の中で開く。中身はポップアップと同じものを使う。
+   開いているカードは cardId で覚えておき、一覧を組み直すときは同じ節点を挿し直す
+   （作り直すと、記録するたびに閉じてしまう） */
+function openCard(item, s){
+  const already = cardId === s.id;
+  el('list').querySelectorAll('.card').forEach(c => c.remove());
+  cardId = already ? null : s.id;
+  if(already) return;
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = popup(s);
+  item.after(card);
+  wirePopup(card);
+  card.scrollIntoView({block:'nearest', behavior:'smooth'});
+}
 
 /* ---- editing inside the popup ---- */
 function flash(root){
@@ -928,7 +1005,7 @@ function set(id, field, value){
   if(value === '' || value == null) delete r[field]; else r[field] = value;
   saveRecords();
   const s = SPOTS.find(x => x.id === id);
-  if(s) s.marker.setIcon(pinIcon(s));
+  if(s && s.marker) s.marker.setIcon(pinIcon(s));   /* 座標の無いスポットはピンが無い */
   render();
 }
 const today = ()=>{
@@ -936,7 +1013,18 @@ const today = ()=>{
   return d.toISOString().slice(0,10);
 };
 /* ポップアップの中身は開くたびに作り直されるので、そのつどボタンをつなぎ直す。
-   大きさを変えたときも中身が作り直されるため、そこからも呼ぶ */
+   大きさを変えたときも中身が作り直されるため、そこからも呼ぶ。
+   一覧の中に開くカード（座標の無いスポット）も同じ中身なので、これを使う */
+function wirePopup(root){
+  root.querySelectorAll('[data-pz]').forEach(b=>{
+    b.addEventListener('click', ev=>{
+      ev.stopPropagation();
+      setPopSize(nextPopSize(b.dataset.pz), true);
+    });
+  });
+  const rec = root.querySelector('.rec');
+  if(rec) wireRec(rec);
+}
 function wireRec(root){
   const id = root.dataset.id;
 
@@ -984,9 +1072,7 @@ map.on('popupopen', ev=>{
   ev.popup.options.autoPanPaddingTopLeft = L.point(wide ? 336 : 20, 80);
   ev.popup.options.autoPanPaddingBottomRight = L.point(20, wide ? 24 : 70);
   ev.popup._adjustPan();
-
-  const root = ev.popup.getElement().querySelector('.rec');
-  if(root) wireRec(root);
+  wirePopup(ev.popup.getElement());
 });
 
 /* mobile sheet */
@@ -1009,7 +1095,7 @@ el('regions').addEventListener('click', e=>{
 });
 
 function fitRegion(){
-  const mine = regionSpots();
+  const mine = regionSpots().filter(onMapAble);   /* 座標の無いものは範囲に入れられない */
   if(mine.length){
     map.fitBounds(L.latLngBounds(mine.map(s=>[s.lat,s.lng])).extend([HOME.lat,HOME.lng]),
       {padding:[60,60], paddingTopLeft:[window.innerWidth>720?330:40, 80]});
@@ -1032,7 +1118,7 @@ function setRegion(id, moveMap){
 }
 
 setRegion(region.id, false);
-if(SPOTS.length){
+if(SPOTS.some(onMapAble)){
   fitRegion();
 } else {
   /* spots.js が読めなかったとき。地図だけでも起点を出しておく */

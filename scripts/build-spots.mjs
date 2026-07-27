@@ -91,8 +91,12 @@ for (const s of spots) {
   if (!s.cat) fail(`${at}: cat がない`);
   else if (cats && !cats.has(s.cat)) fail(`${at}: カテゴリ「${s.cat}」は index.html の COLORS にない`);
 
-  if (typeof s.lat !== "number" || typeof s.lng !== "number") {
-    fail(`${at}: lat/lng が数値でない`);
+  /* 座標は任意。飲食店の台帳のように緯度経度が空のものは、地図に出さず一覧だけに出す。
+     片方だけあるのは入力ミスなので弾く */
+  if (s.lat === undefined && s.lng === undefined) {
+    // 地図に出ないスポット。ここでは何も見ない
+  } else if (typeof s.lat !== "number" || typeof s.lng !== "number") {
+    fail(`${at}: lat/lng は両方そろえるか、両方省くこと`);
   } else {
     const r = byRegion.get(s.region);
     if (r && r.center) {

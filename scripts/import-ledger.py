@@ -46,28 +46,34 @@ CANON = {
     "アスレチック": "アスレチック",
     "遊園地": "遊園地",
     "テーマパーク": "テーマパーク",
+    "飲食店": "飲食店",
 }
+
+# 横断ファイルの「エリア」列を地域idに読み替える
+AREA = {"関東": "kanto", "沖縄": "okinawa", "北海道": "hokkaido", "札幌": "hokkaido",
+        "小田原": "odawara", "名古屋": "nagoya"}
 
 # 列名のゆれ。左が使いたい意味、右が台帳で見かける名前
 ALIAS = {
     "id": ["ID"],
     "cat": ["大カテゴリ"],
-    "sub": ["小カテゴリ"],
-    "name": ["施設・スポット", "施設名"],
+    "sub": ["小カテゴリ", "ジャンル"],
+    "name": ["施設・スポット", "施設名", "店名"],
     "addr": ["所在地", "所在地・代表住所"],
     "t1": ["電車_最短分", "公共交通_最短分"],
     "t2": ["電車_最長分", "公共交通_最長分"],
     "c1": ["車_最短分"],
     "c2": ["車_最長分"],
     "rain": ["雨天対応"],
-    "desc": ["概要"],
+    "desc": ["概要", "概要・選定根拠"],
     "age": ["おすすめ年齢"],
     "rate": ["GoogleMaps評価"],
     "note": ["注意・組み合わせ"],
-    "url": ["公式URL"],
+    "url": ["公式URL", "公式・調査ソース"],
     "lat": ["緯度"],
     "lng": ["経度"],
     "season": ["特におすすめな月"],
+    "area": ["エリア"],
 }
 # 区まで残す市（政令指定都市）。ここに無い市の「◯◯区」は地区名なので落とす
 SEIREI = {"札幌市", "仙台市", "さいたま市", "千葉市", "横浜市", "川崎市", "相模原市",
@@ -147,13 +153,19 @@ def area(addr, pref):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("xlsx")
-    ap.add_argument("--region", required=True, help="data/regions.json にある地域のid")
+    ap.add_argument("--region", help="data/regions.json にある地域のid。--by-area のときは不要")
+    ap.add_argument("--by-area", action="store_true",
+                    help="「エリア」列で地域を振り分ける（地域をまたぐ台帳用）。既存は消さずにIDで上書き")
     ap.add_argument("--pref", default="", help="台帳の住所に都道府県が無いときに前へ付ける")
     ap.add_argument("--sheet", default="全スポット")
     args = ap.parse_args()
 
     regions = json.loads(REGIONS.read_text(encoding="utf-8"))
-    if args.region not in {r["id"] for r in regions}:
+    known = {r["id"] for r in regions}
+    if args.by_area:
+        if args.region:
+            sys.exit("--by-area と --region は同時に使えない")
+    elif args.region not in known:
         sys.exit(f"data/regions.json に地域 '{args.region}' がない。先に足すこと")
 
     wb = openpyxl.load_workbook(args.xlsx, data_only=True)
@@ -168,7 +180,8 @@ def main():
             if n in head:
                 col[key] = head[n]
                 break
-    for req in ("id", "cat", "name", "lat", "lng"):
+    need = ["id", "cat", "name"] + (["area"] if args.by_area else [])
+    for req in need:
         if req not in col:
             sys.exit(f"必要な列が見つからない: {ALIAS[req]}")
     get = lambda r, k: r[col[k]] if k in col else None
@@ -181,6 +194,17 @@ def main():
         if cat not in CANON:
             problems.append(f"知らないカテゴリ: {cat}（{txt(get(r, 'name'))}）")
             continue
+        if args.by_area:
+            a = txt(get(r, "area"))
+            if a not in AREA:
+                problems.append(f"知らないエリア: {a}（{txt(get(r, 'name'))}）")
+                continue
+            rid = AREA[a]
+            if rid not in known:
+                problems.append(f"エリア「{a}」に対応する地域 {rid} が regions.json にない")
+                continue
+        else:
+            rid = args.region
         o = {
             "id": txt(get(r, "id")),
             "cat": CANON[cat],
@@ -196,7 +220,7 @@ def main():
             "note": txt(get(r, "note")),
             "url": txt(get(r, "url")),
             "lat": num(get(r, "lat")), "lng": num(get(r, "lng")),
-            "region": args.region,
+            "region": rid,
         }
         season = txt(get(r, "season"))
         if season:
@@ -213,20 +237,33 @@ def main():
             print("   ", p)
 
     cur = json.loads(SPOTS.read_text(encoding="utf-8"))
-    others = [s for s in cur if s["region"] != args.region]
-    clash = {s["id"] for s in spots} & {s["id"] for s in others}
-    if clash:
-        sys.exit(f"IDが他の地域とぶつかっている: {sorted(clash)[:5]}")
+    ids = {s["id"] for s in spots}
+    if args.by_area:
+        # 既存はIDで上書き。載っていないものは残す（他のカテゴリを消さないため）
+        others = [s for s in cur if s["id"] not in ids]
+        updated = len(cur) - len(others)
+        moved = [s["id"] for s in spots
+                 for o in cur if o["id"] == s["id"] and o["region"] != s["region"]]
+        if moved:
+            print(f"!! 地域が変わるID: {moved[:5]}（記録は残るが表示先が移る）")
+    else:
+        others = [s for s in cur if s["region"] != args.region]
+        updated = 0
+        clash = ids & {s["id"] for s in others}
+        if clash:
+            sys.exit(f"IDが他の地域とぶつかっている: {sorted(clash)[:5]}")
 
     # 同じ座標だとピンが重なってタップできない。ずらすのは同じ地域の中だけ。
     # 地域が違えば同時に表示しないので、隣の地域と同じ座標でも困らない。
-    seen = {}
+    seen = {(s["region"], s["lat"], s["lng"]): s["id"] for s in others if s.get("lat")}
     for s in spots:
-        key = (s["lat"], s["lng"])
+        if s.get("lat") is None:
+            continue
+        key = (s["region"], s["lat"], s["lng"])
         if key in seen:
             s["lat"] = round(s["lat"] + 0.00045, 6)   # 約50m北
             print(f"  座標が重複: {s['id']} {s['name']} ← {seen[key]}。50mずらした")
-        seen[(s["lat"], s["lng"])] = s["id"]
+        seen[(s["region"], s["lat"], s["lng"])] = s["id"]
 
     allspots = others + spots
     with SPOTS.open("w", encoding="utf-8") as f:
@@ -236,7 +273,10 @@ def main():
 
     withm = sum(1 for s in spots if s.get("months"))
     withr = sum(1 for s in spots if s.get("rate"))
-    print(f"{args.region}: {len(spots)}件を取り込んだ（評価 {withr}件 / おすすめ月 {withm}件）")
+    nopos = sum(1 for s in spots if s.get("lat") is None)
+    where = "エリア列で振り分け" if args.by_area else args.region
+    print(f"{where}: {len(spots)}件を取り込んだ"
+          f"（うち上書き {updated}件 / 評価 {withr}件 / おすすめ月 {withm}件 / 座標なし {nopos}件）")
     print(f"住所の例: {sorted({s['addr'] for s in spots})[:6]}")
     print(f"合計 {len(allspots)}件。npm run build:spots && npm run check を忘れずに")
 
