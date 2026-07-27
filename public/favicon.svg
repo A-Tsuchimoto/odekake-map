@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="お出かけマップ">
+  <!-- 背景はアプリと同じ紺。タブが明るくても暗くても沈まない -->
+  <rect width="32" height="32" rx="7" fill="#10222E"/>
+  <g stroke="#F5B335" stroke-width="2.6" stroke-linecap="round">
+    <!-- 光。16pxでも潰れないよう8本・太めに -->
+    <path d="M16 3.4v3.3M16 25.3v3.3M3.4 16h3.3M25.3 16h3.3"/>
+    <path d="M7.1 7.1l2.3 2.3M22.6 22.6l2.3 2.3M24.9 7.1l-2.3 2.3M9.4 22.6l-2.3 2.3"/>
+  </g>
+  <circle cx="16" cy="16" r="6.4" fill="#F5B335"/>
+</svg>
