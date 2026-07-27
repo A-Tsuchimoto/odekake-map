@@ -81,10 +81,14 @@ overflow:hidden;
 font-size:10px;letter-spacing:.14em;font-weight:700;color:var(--ink-45);
 margin:0 0 9px;display:flex;justify-content:space-between;align-items:center;
 }
+.lbl-btns{display:flex;gap:2px;flex:none}
 .lbl button{
 font:inherit;font-size:10px;letter-spacing:.08em;border:0;background:none;
 color:var(--focus);cursor:pointer;padding:2px 4px;border-radius:4px;font-weight:700;
+white-space:nowrap;
 }
+.lbl button:hover{background:rgba(29,127,214,.09)}
+.lbl button:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
 .chips{display:flex;flex-wrap:wrap;gap:5px}
 .chip{
 display:inline-flex;align-items:center;gap:5px;
@@ -327,11 +331,13 @@ width:34px;height:4px;border-radius:2px;background:var(--line);
       </div>
     </div>
     <div class="block">
-      <p class="lbl">訪問状況</p>
+      <p class="lbl">訪問状況
+        <span class="lbl-btns"><button id="allSt">すべて表示</button><button id="noSt">すべて解除</button></span></p>
       <div class="chips" id="stats"></div>
     </div>
     <div class="block">
-      <p class="lbl">カテゴリ <button id="allCat">すべて表示</button></p>
+      <p class="lbl">カテゴリ
+        <span class="lbl-btns"><button id="allCat">すべて表示</button><button id="noCat">すべて解除</button></span></p>
       <div class="chips" id="cats"></div>
     </div>
     <div class="block">
@@ -583,6 +589,16 @@ el('stats').innerHTML = SORDER.map(k=>{
   return `<button class="chip" data-st="${k}" aria-pressed="true" style="--c:${tone};color:#fff">
     <span class="dot"></span>${STATUS[k].label}<span class="n" data-cnt="${k}">0</span></button>`;
 }).join('');
+function setAllStatus(on){
+  SORDER.forEach(k => on ? activeStatus.add(k) : activeStatus.delete(k));
+  el('stats').querySelectorAll('.chip').forEach(b=>{
+    b.setAttribute('aria-pressed', String(on));
+    b.style.color = on ? '#fff' : b.style.getPropertyValue('--c');
+  });
+  render();
+}
+el('allSt').onclick = ()=> setAllStatus(true);
+el('noSt').onclick = ()=> setAllStatus(false);
 el('stats').addEventListener('click',e=>{
   const b = e.target.closest('.chip'); if(!b) return;
   const k = b.dataset.st, on = b.getAttribute('aria-pressed')==='true';
@@ -773,11 +789,17 @@ el('cats').addEventListener('click',e=>{
   on ? active.delete(c) : active.add(c);
   render();
 });
-el('allCat').onclick = ()=>{
-  ORDER.forEach(c=>active.add(c));
-  el('cats').querySelectorAll('.chip').forEach(b=>{b.setAttribute('aria-pressed','true');b.style.color='#fff';});
+/* 「すべて解除」→ 見たいものだけ選ぶ、という使い方をするための一括切り替え */
+function setAllCats(on){
+  ORDER.forEach(c => on ? active.add(c) : active.delete(c));
+  el('cats').querySelectorAll('.chip').forEach(b=>{
+    b.setAttribute('aria-pressed', String(on));
+    b.style.color = on ? '#fff' : COLORS[b.dataset.cat];
+  });
   render();
-};
+}
+el('allCat').onclick = ()=> setAllCats(true);
+el('noCat').onclick = ()=> setAllCats(false);
 el('cats').querySelectorAll('.chip').forEach(b=>b.style.color='#fff');
 
 function bindRange(id, key, fmt){
@@ -947,9 +969,13 @@ function draw(){
       <span class="mt">車${s.c1||'–'}分</span>
       <span class="sub">${esc(s.cat)}・${esc(s.addr)}${s.rain?'・雨'+s.rain:''}</span>
     </button>`).join('')
-    : `<p class="empty">条件に合うスポットがありません。${
-        state.month ? state.month + '月がおすすめのスポットだけに絞っています。月を「指定なし」に戻すか、' : ''
-      }所要時間をゆるめるか、カテゴリを追加してください。</p>`;
+    : `<p class="empty">${
+        !active.size ? 'カテゴリが1つも選ばれていません。見たいものをタップするか、「すべて表示」で戻せます。'
+        : !activeStatus.size ? '訪問状況が1つも選ばれていません。見たいものをタップするか、「すべて表示」で戻せます。'
+        : '条件に合うスポットがありません。' + (state.month
+            ? state.month + '月がおすすめのスポットだけに絞っています。月を「指定なし」に戻すか、' : '')
+          + '所要時間をゆるめるか、カテゴリを追加してください。'
+      }</p>`;
 
   if(card && cardId){
     const item = el('list').querySelector(`.item[data-id="${cardId}"]`);
