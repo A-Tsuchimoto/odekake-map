@@ -2,9 +2,15 @@
 """Excelの台帳から1地域分のスポットを data/spots.json に取り込む。
 
     python3 scripts/import-ledger.py <台帳.xlsx> --region odawara [--pref 神奈川県]
+    python3 scripts/import-ledger.py <台帳.xlsx> --by-area [--replace-cat 飲食店]
+    python3 scripts/import-ledger.py --purge-cat 飲食店      # 消すだけ
 
 指定した region のスポットを台帳の中身で丸ごと入れ替える。他の地域は触らない。
 region は data/regions.json に先に足しておくこと（起点と距離の輪はそちら）。
+
+--by-area は「エリア」列で地域を振り分ける（地域をまたぐ台帳用）。既定はIDで上書きし、
+台帳に載っていないスポットは残す。カテゴリごと差し替えたいときは --replace-cat を足すと、
+台帳に出てくる地域の中でそのカテゴリを先に消してから入れる。
 
 取り込んだあとは必ず:
     npm run build:spots && npm run check
@@ -137,6 +143,12 @@ def area(addr, pref):
     if m:
         return head_pref + m.group(1) + m.group(2)
 
+    # 東京23区は市を経由しないので、区で切る（八王子市などは下の市町村で拾う）
+    if head_pref == "東京都":
+        m = re.match(r"^(.{1,6}?区)", a)
+        if m:
+            return head_pref + m.group(1)
+
     m = re.match(r"^(.{1,8}?[市町村])", a)
     if not m:
         return head_pref + a
@@ -150,15 +162,36 @@ def area(addr, pref):
     return head_pref + head
 
 
+def write_spots(spots):
+    """1行1スポットで書く（差分が読めるように）"""
+    with SPOTS.open("w", encoding="utf-8") as f:
+        f.write("[\n")
+        f.write(",\n".join(json.dumps(s, ensure_ascii=False) for s in spots))
+        f.write("\n]\n")
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("xlsx")
+    ap.add_argument("xlsx", nargs="?", help="--purge-cat だけのときは省ける")
     ap.add_argument("--region", help="data/regions.json にある地域のid。--by-area のときは不要")
     ap.add_argument("--by-area", action="store_true",
                     help="「エリア」列で地域を振り分ける（地域をまたぐ台帳用）。既存は消さずにIDで上書き")
     ap.add_argument("--pref", default="", help="台帳の住所に都道府県が無いときに前へ付ける")
+    ap.add_argument("--replace-cat", help="取り込む前に、台帳に出てくる地域のそのカテゴリを消す")
+    ap.add_argument("--purge-cat", help="そのカテゴリを全地域から消す")
     ap.add_argument("--sheet", default="全スポット")
     args = ap.parse_args()
+
+    if not args.xlsx:
+        if not args.purge_cat:
+            sys.exit("台帳のファイルか --purge-cat のどちらかが要る")
+        cur = json.loads(SPOTS.read_text(encoding="utf-8"))
+        left = [s for s in cur if s["cat"] != args.purge_cat]
+        gone = len(cur) - len(left)
+        write_spots(left)
+        print(f"「{args.purge_cat}」を {gone}件 消した。残り {len(left)}件")
+        print("npm run build:spots && npm run check を忘れずに")
+        return
 
     regions = json.loads(REGIONS.read_text(encoding="utf-8"))
     known = {r["id"] for r in regions}
@@ -253,6 +286,17 @@ def main():
         if clash:
             sys.exit(f"IDが他の地域とぶつかっている: {sorted(clash)[:5]}")
 
+    if args.purge_cat:
+        before = len(others)
+        others = [s for s in others if s["cat"] != args.purge_cat]
+        print(f"「{args.purge_cat}」を全地域から {before - len(others)}件 消した")
+    elif args.replace_cat:
+        here = {s["region"] for s in spots}
+        before = len(others)
+        others = [s for s in others
+                  if not (s["cat"] == args.replace_cat and s["region"] in here)]
+        print(f"「{args.replace_cat}」を {sorted(here)} から {before - len(others)}件 消して入れ替える")
+
     # 同じ座標だとピンが重なってタップできない。ずらすのは同じ地域の中だけ。
     # 地域が違えば同時に表示しないので、隣の地域と同じ座標でも困らない。
     seen = {(s["region"], s["lat"], s["lng"]): s["id"] for s in others if s.get("lat")}
@@ -266,10 +310,7 @@ def main():
         seen[(s["region"], s["lat"], s["lng"])] = s["id"]
 
     allspots = others + spots
-    with SPOTS.open("w", encoding="utf-8") as f:
-        f.write("[\n")
-        f.write(",\n".join(json.dumps(s, ensure_ascii=False) for s in allspots))
-        f.write("\n]\n")
+    write_spots(allspots)
 
     withm = sum(1 for s in spots if s.get("months"))
     withr = sum(1 for s in spots if s.get("rate"))

@@ -4,7 +4,7 @@
 何をするアプリかは [README](../README.md)、コードを触るときの決まりは
 [CLAUDE.md](../CLAUDE.md)、台帳（Excel）の作り方は [docs/LEDGER.md](LEDGER.md)。
 
-最終更新: 2026-07-27
+最終更新: 2026-07-28
 
 ---
 
@@ -13,18 +13,19 @@
 - **公開先**: Cloudflare **Workers**（Pages ではない）。Worker名 `odekake-map`
 - **デプロイ**: GitHub連携。push すると Cloudflare 側が `npx wrangler deploy` を実行する
 - **作業ブランチ**: `claude/outing-map-cloudflare-2nhqik`（このリポジトリの既定ブランチ）
-- **データ**: 5地域・704件（うち飲食店112件）。内訳は README の表
+- **データ**: 5地域・644件（うち飲食店52件）。内訳は README の表
 
 | 地域 | 起点 | 件数 | 座標なし | Google評価 | おすすめ月 |
 |---|---|---|---|---|---|
-| 関東 kanto | 高田駅 | 223 | 40 | 183 | 61 |
-| 沖縄 okinawa | 県庁前駅 | 149 | 24 | 1 | 0 |
-| 北海道 hokkaido | 札幌駅 | 152 | 24 | 128 | 0 |
-| 小田原 odawara | 小田原駅 | 108 | 24 | 84 | 69 |
+| 関東 kanto | 高田駅 | 235 | 0 | 183 | 61 |
+| 沖縄 okinawa | 県庁前駅 | 125 | 0 | 1 | 0 |
+| 北海道 hokkaido | 札幌駅 | 128 | 0 | 128 | 0 |
+| 小田原 odawara | 小田原駅 | 84 | 0 | 84 | 69 |
 | 名古屋 nagoya | 名古屋駅 | 72 | 0 | 72 | 53 |
 
-「座標なし」は飲食店。台帳が緯度経度を空にしている（推測で埋めない方針）ため、
-地図に出さず一覧だけに出している。座標が入れば取り込み直すだけでピンが立つ。
+**飲食店は作り直し中**。2026-07-28に旧112件を全削除し、新しい関東52件だけ入れた。
+沖縄・北海道・小田原は新リストができ次第エリアごとに入れ替える（名古屋はまだ無い）。
+旧IDは `KNT-FOD-*` 形式、新IDは `KNT-MEN-001` のような形式で、体系が変わっている。
 
 ## 2. Cloudflare 側の設定（コードに書けないもの）
 
@@ -50,8 +51,10 @@ npm run build:spots    # data/*.json → public/spots.js
 npm run deploy         # 手元からデプロイしたいとき（普段はpushで足りる）
 
 # 台帳の取り込み（要 pip install openpyxl）
-python3 scripts/import-ledger.py 台帳.xlsx --region nagoya
-python3 scripts/import-ledger.py 飲食店.xlsx --by-area --sheet 全飲食店
+python3 scripts/import-ledger.py 台帳.xlsx --region nagoya          # 1エリア分
+python3 scripts/import-ledger.py 台帳.xlsx --by-area                # エリア列で振り分け
+python3 scripts/import-ledger.py 台帳.xlsx --by-area --replace-cat 飲食店   # カテゴリごと差し替え
+python3 scripts/import-ledger.py --purge-cat 飲食店                  # 全地域から消すだけ
 ```
 
 `data/spots.json` `data/regions.json` を直したら **必ず** `npm run build:spots`。
@@ -115,8 +118,12 @@ await ctx.route("https://*.basemaps.cartocdn.com/**", r => r.abort());   // タ�
 
 ## 7. 残っている課題
 
-- **飲食店112件に座標が無い**。台帳に緯度経度が入れば取り込み直すだけで地図に出る
-- **沖縄125件のGoogle評価が未取得**（台帳が空欄）
+- **飲食店の入れ直し**。関東52件だけ入っている。沖縄・北海道・小田原は削除済みで、
+  新しい台帳を待っている状態。入れるときは
+  `--by-area --replace-cat 飲食店` でエリアごとに差し替える
+- **飲食店のGoogle評価が未取得**（台帳が空欄）。沖縄125件のスポットも同様
+- **旧飲食店IDの記録がKVに残る**。`KNT-FOD-*` に記録を付けていた場合、
+  新IDとは紐づかないので表示されない（害はないが消えない）
 - **オフラインで付けた記録が自動再送されない**。端末に控えるだけなので、
   復帰後に手動で「つなぐ」が要る。直すなら sw.js の Background Sync か `online` イベント
 - 記録は毎回まるごとPOST。件数が増えたら差分更新を検討（競合の扱いを先に決めること）
