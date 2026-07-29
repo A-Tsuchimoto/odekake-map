@@ -55,9 +55,17 @@ CANON = {
     "飲食店": "飲食店",
 }
 
-# 横断ファイルの「エリア」列を地域idに読み替える
+# 横断ファイルの「エリア」列を地域idに読み替える。
+# 台帳によって「北海道（札幌）」のようにカッコ書きが付くので、カッコは落として見る
 AREA = {"関東": "kanto", "沖縄": "okinawa", "北海道": "hokkaido", "札幌": "hokkaido",
         "小田原": "odawara", "名古屋": "nagoya"}
+
+
+def region_of(area_name):
+    if not area_name:
+        return None
+    key = re.sub(r"[（(].*?[）)]", "", area_name).strip()
+    return AREA.get(key) or AREA.get(area_name)
 
 # 列名のゆれ。左が使いたい意味、右が台帳で見かける名前
 ALIAS = {
@@ -229,10 +237,10 @@ def main():
             continue
         if args.by_area:
             a = txt(get(r, "area"))
-            if a not in AREA:
+            rid = region_of(a)
+            if not rid:
                 problems.append(f"知らないエリア: {a}（{txt(get(r, 'name'))}）")
                 continue
-            rid = AREA[a]
             if rid not in known:
                 problems.append(f"エリア「{a}」に対応する地域 {rid} が regions.json にない")
                 continue
