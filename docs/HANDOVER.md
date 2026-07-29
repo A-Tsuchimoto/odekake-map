@@ -18,8 +18,8 @@
 | 地域 | 起点 | 件数 | 座標なし | Google評価 | おすすめ月 |
 |---|---|---|---|---|---|
 | 関東 kanto | 高田駅 | 235 | 0 | 183 | 61 |
-| 沖縄 okinawa | 県庁前駅 | 134 | 0 | 1 | 0 |
-| 北海道 hokkaido | 札幌駅 | 140 | 0 | 128 | 0 |
+| 沖縄 okinawa | 県庁前駅 | 134 | 0 | 1 | 34 |
+| 北海道 hokkaido | 札幌駅 | 140 | 0 | 128 | 64 |
 | 小田原 odawara | 小田原駅 | 92 | 0 | 84 | 69 |
 | 名古屋 nagoya | 名古屋駅 | 84 | 0 | 72 | 53 |
 
@@ -55,6 +55,7 @@ python3 scripts/import-ledger.py 台帳.xlsx --region nagoya          # 1エリ�
 python3 scripts/import-ledger.py 台帳.xlsx --by-area                # エリア列で振り分け
 python3 scripts/import-ledger.py 台帳.xlsx --by-area --replace-cat 飲食店   # カテゴリごと差し替え
 python3 scripts/import-ledger.py --purge-cat 飲食店                  # 全地域から消すだけ
+python3 scripts/import-ledger.py 台帳.xlsx --only season             # その列だけ反映
 ```
 
 `data/spots.json` `data/regions.json` を直したら **必ず** `npm run build:spots`。

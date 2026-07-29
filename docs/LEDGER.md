@@ -12,6 +12,8 @@ python3 scripts/import-ledger.py 台帳.xlsx --by-area
 python3 scripts/import-ledger.py 関東飲食店.xlsx --by-area --replace-cat 飲食店
 # 全地域からカテゴリを消すだけ
 python3 scripts/import-ledger.py --purge-cat 飲食店
+# 特定の列だけ既存に反映する（IDで突き合わせ。他の列は無視）
+python3 scripts/import-ledger.py 沖縄台帳.xlsx --only season
 # 取り込んだら必ず
 npm run build:spots && npm run check
 ```
@@ -64,6 +66,9 @@ npm run build:spots && npm run check
 ```
 
 区切りは `・` でも `／` でもよい。カッコの中は自由。月が1つも読めないと警告が出る。
+
+**あとから月だけ追記した台帳**を渡すときは `--only season` を使う。IDで突き合わせて
+`特におすすめな月` だけを反映するので、他の列がどうなっていても既存の値は変わらない。
 
 ---
 

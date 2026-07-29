@@ -3,6 +3,7 @@
 
     python3 scripts/import-ledger.py <台帳.xlsx> --region odawara [--pref 神奈川県]
     python3 scripts/import-ledger.py <台帳.xlsx> --by-area [--replace-cat 飲食店]
+    python3 scripts/import-ledger.py <台帳.xlsx> --only season   # その列だけ反映
     python3 scripts/import-ledger.py --purge-cat 飲食店      # 消すだけ
 
 指定した region のスポットを台帳の中身で丸ごと入れ替える。他の地域は触らない。
@@ -11,6 +12,10 @@ region は data/regions.json に先に足しておくこと（起点と距離の
 --by-area は「エリア」列で地域を振り分ける（地域をまたぐ台帳用）。既定はIDで上書きし、
 台帳に載っていないスポットは残す。カテゴリごと差し替えたいときは --replace-cat を足すと、
 台帳に出てくる地域の中でそのカテゴリを先に消してから入れる。
+
+--only は指定した項目だけを既存のスポットに反映する（IDで突き合わせ、他の列は無視）。
+「おすすめ月だけ追記した台帳が来た」ようなときに、他の項目を触らずに済む。
+season を指定すると months（絞り込み用に読み取った月）も一緒に入る。
 
 取り込んだあとは必ず:
     npm run build:spots && npm run check
@@ -187,6 +192,7 @@ def main():
     ap.add_argument("--pref", default="", help="台帳の住所に都道府県が無いときに前へ付ける")
     ap.add_argument("--replace-cat", help="取り込む前に、台帳に出てくる地域のそのカテゴリを消す")
     ap.add_argument("--purge-cat", help="そのカテゴリを全地域から消す")
+    ap.add_argument("--only", help="この項目だけ既存に反映する（例 season）。IDで突き合わせる")
     ap.add_argument("--sheet", default="全スポット")
     args = ap.parse_args()
 
@@ -203,7 +209,10 @@ def main():
 
     regions = json.loads(REGIONS.read_text(encoding="utf-8"))
     known = {r["id"] for r in regions}
-    if args.by_area:
+    if args.only:
+        if args.region or args.by_area:
+            sys.exit("--only はIDで突き合わせるので --region / --by-area は要らない")
+    elif args.by_area:
         if args.region:
             sys.exit("--by-area と --region は同時に使えない")
     elif args.region not in known:
@@ -235,7 +244,9 @@ def main():
         if cat not in CANON:
             problems.append(f"知らないカテゴリ: {cat}（{txt(get(r, 'name'))}）")
             continue
-        if args.by_area:
+        if args.only:
+            rid = ""            # --only は既存の地域をそのまま使う
+        elif args.by_area:
             a = txt(get(r, "area"))
             rid = region_of(a)
             if not rid:
@@ -278,6 +289,41 @@ def main():
             print("   ", p)
 
     cur = json.loads(SPOTS.read_text(encoding="utf-8"))
+
+    if args.only:
+        keys = [k.strip() for k in args.only.split(",") if k.strip()]
+        if "season" in keys and "months" not in keys:
+            keys.append("months")          # 原文と読み取った月は必ず一緒に持つ
+        by_id = {s["id"]: s for s in cur}
+        changed = added = cleared = 0
+        for n in spots:
+            old = by_id.get(n["id"])
+            if not old:
+                problems.append(f"既存に無いID: {n['id']}（{n.get('name')}）")
+                continue
+            before = {k: old.get(k) for k in keys}
+            for k in keys:
+                if k in n:
+                    old[k] = n[k]
+                else:
+                    old.pop(k, None)
+            after = {k: old.get(k) for k in keys}
+            if after != before:
+                changed += 1
+                if not any(before.values()):
+                    added += 1
+                elif not any(after.values()):
+                    cleared += 1
+        if problems:
+            print("!! 確認が要るもの:")
+            for p in problems:
+                print("   ", p)
+        write_spots(cur)
+        print(f"{'/'.join(keys)} だけ反映: {len(spots)}行を見て {changed}件 変更"
+              f"（新しく入った {added}件 / 消えた {cleared}件）")
+        print("npm run build:spots && npm run check を忘れずに")
+        return
+
     ids = {s["id"] for s in spots}
     if args.by_area:
         # 既存はIDで上書き。載っていないものは残す（他のカテゴリを消さないため）
