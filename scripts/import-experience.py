@@ -13,7 +13,8 @@ IDで突き合わせて、体験まわりの項目だけを既存に反映する
     experience_memo   → xmemo  1〜2文の説明
     experience_age    → xage   原文（ポップアップに出す）
     experience_programs → xprog 各プログラムの名前と対象年齢だけ
-    primary_source_urls → xurl 先頭の1つ（体験情報の出どころ）
+    primary_source_urls → xurl 体験の案内ページ。公式URL(url)と同じものは飛ばして
+                                最初の1つを取る（ポップアップで別のボタンにするため）
 
     age（既存のおすすめ年齢） → ages 未就学児／小学生／中学生以上 の配列（絞り込み用）
 
@@ -46,7 +47,9 @@ GROUPS = [
     ("アート・表現", ["アート", "表現", "映画", "対話型", "ワークショップ", "デジタル"]),
     ("仕事・職業体験", ["職業", "仕事", "鉄道", "産業", "技術", "モータースポーツ", "防災", "気象",
                   "下水道", "施設見学", "土木"]),
-    ("体を動かす", ["スポーツ", "カヤック", "身体", "指導者付き"]),
+    ("体を動かす", ["スポーツ", "カヤック", "身体", "指導者付き", "マリン", "ダイビング",
+                "シュノーケ", "SUP", "サップ", "ヨット", "セーリング", "パラセール",
+                "クルーズ", "クルージング", "冒険"]),
     ("ガイド・解説", ["ガイド", "解説", "ツアー", "バックヤード", "学芸員", "レンジャー",
                  "専門家", "専門スタッフ", "スタッフ", "研究者", "案内", "教室", "講座",
                  "プログラム", "イベント", "体験", "学習", "相談", "交流"]),
@@ -89,6 +92,18 @@ def ages_of(*texts):
     return [a for a in AGES if a in got]
 
 
+def pick_urls(x, s):
+    """体験の案内先を1つ選ぶ。公式サイトと同じURLだと、ポップアップの
+    「体験の案内」ボタンが「公式サイト」と同じ行き先になって出ない。
+    違うものが1つでもあればそれを優先する。"""
+    urls = [u for u in (x.get("primary_source_urls") or []) if isinstance(u, str) and u.strip()]
+    if not urls:
+        return {}
+    off = (s.get("url") or "").rstrip("/")
+    other = [u for u in urls if u.rstrip("/") != off]
+    return {"xurl": (other or urls)[0]}
+
+
 def main():
     if len(sys.argv) < 2:
         sys.exit("使い方: python3 scripts/import-experience.py 調査.json")
@@ -104,8 +119,10 @@ def main():
             missing.append(x["id"])
             continue
 
-        # 体験まわりは毎回入れ直す（該当なしに変わった場合に消えるように）
-        for k in ("xtags", "xg", "xmemo", "xage", "xprog", "xurl"):
+        # 体験まわりは毎回入れ直す（該当なしに変わった場合に消えるように）。
+        # ages も一度落とす。残したままだと、2回目以降で項目の並びだけが入れ替わって
+        # data/spots.json の差分が全件に広がる
+        for k in ("xtags", "xg", "xmemo", "xage", "xprog", "xurl", "ages"):
             s.pop(k, None)
 
         tags = x.get("experience_tags")
@@ -139,9 +156,7 @@ def main():
                 progs.append(item)
             if progs:
                 s["xprog"] = progs
-            urls = x.get("primary_source_urls") or []
-            if isinstance(urls, list) and urls:
-                s["xurl"] = urls[0]
+            s.update(pick_urls(x, s))
             tagged += 1
 
         # おすすめ年齢は全スポットで正規化する（体験の有無によらず絞り込めるように）
