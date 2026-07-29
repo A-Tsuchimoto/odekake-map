@@ -22,14 +22,15 @@
 
 ```bash
 npm run check    # spots.json の検査 + spots.js が最新か + wrangler.toml の書式
-npm run dev      # http://localhost:8788 で実際に開いて確かめる
+npm run dev      # http://localhost:8787 で実際に開いて確かめる
 ```
 
 `wrangler.toml` を直すときは `main` と `[assets]` を消さないこと。
 Pages用の `pages_build_output_dir` を書くとデプロイが入口を見つけられずに落ちる。
 
 `data/spots.json` `data/regions.json` を直したときは `npm run build:spots`。
-`public/spots.js` を手で編集しない。
+`public/spots.js` を手で編集しない。台帳の取り込みは `scripts/import-ledger.py`、
+体験プログラムの調査JSONは `scripts/import-experience.py`。
 
 ## 触るときに気をつけるところ
 
@@ -44,6 +45,12 @@ Pages用の `pages_build_output_dir` を書くとデプロイが入口を見つ�
   地域ごとに別のカテゴリを作らない（チップが倍に増える）
 - **座標は任意**。飲食店の台帳は緯度経度が空なので、無いものはマーカーを作らず一覧だけに出す
   （`onMapAble()` で判定、一覧では「地図なし」）。`s.marker` を触る前に必ず存在を確かめる
+- **体験タグと年齢の絞り込みは「押したものだけ」**（`activeXg` `activeAge`）。
+  カテゴリや訪問状況と逆で、何も押していない状態が既定。全部押した状態から始めると
+  タグの無いスポット（430件）が消える。区分は `index.html` の `XGROUPS` `XAGES` が正で、
+  `scripts/import-experience.py` の `GROUPS` と一対一。`npm run check` が突き合わせている。
+  その地域に0件の区分はチップごと隠し、選ばれていたら外す（解除できない絞り込みを残さない）
+- **体験の日程・料金・予約は持たない**。変わりやすいので `xurl`（一次情報）に送る
 - **おすすめの月は `season`（原文）と `months`（配列）の2つ持ち**。片方だけにしない。
   月で絞ると情報の無いスポットは消えるので、`months` が1件も無い地域では選べなくしてある
 - **スポットIDは変えない**。記録はIDで突き合わせているので、振り直すと過去の記録が迷子になる

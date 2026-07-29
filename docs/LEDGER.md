@@ -102,6 +102,55 @@ npm run build:spots && npm run check
 川・湖・ダム / 川・滝・ダム・マングローブ → 川・湖・滝・ダム
 ```
 
+## 体験プログラムの調査（JSON）
+
+Excelの台帳とは別に、体験タグはJSONで取り込む。IDで突き合わせて体験まわりだけを
+入れ直すので、他の列には触らない。該当なしのスポットも含めて全件を渡してよい
+（タグが空なら、前に付いていた体験の情報を消す）。
+
+```bash
+python3 scripts/import-experience.py ~/体験調査.json
+npm run build:spots && npm run check
+```
+
+```json
+[{ "id": "S001",
+   "experience_tags": ["科学・実験教室", "ものづくり・工作", "ガイドツアー"],
+   "experience_memo": "小学生向けの実験・工作教室やアテンドツアーを開催。",
+   "experience_age": "主に小学生。未就学児は保護者同伴で参加できる回あり。",
+   "experience_programs": [{ "name": "MMサイエンスクラブ", "target_age": "小学生" }],
+   "primary_source_urls": ["https://example.com/event.html"] }]
+```
+
+| キー | 中身 | 取り込み後 |
+|---|---|---|
+| **id** | 既存のスポットID | 突き合わせに使う。無いIDは警告を出して飛ばす |
+| experience_tags | タグの配列。該当なしは `[]` か `"該当なし"` | `xtags`（原文）と `xg`（下の12区分）になる |
+| experience_memo | 1〜2文 | `xmemo` |
+| experience_age | 対象年齢の自由記述 | `xage` |
+| experience_programs | `name` と `target_age`。**先頭3つだけ**入る | `xprog` |
+| primary_source_urls | 一次情報のURL。**先頭1つだけ**入る | `xurl`（ポップアップの「体験の案内」） |
+
+**取り込まない**もの（あっても無害）: summary、schedule、fee、reservation、
+各プログラムの source_url、evidence_note、research_status、source_checked_at。
+日程・料金・予約は変わりやすく、結局は公式を見ることになるので持たない。
+
+タグの原文は自由でよい。取り込みのときに次の12区分へ寄せる（`scripts/import-experience.py`
+の `GROUPS`。上から順に見て最初に当たったもの）。**どの区分にも寄らないタグは警告が出る**ので、
+そのときはキーワードを足すか、タグの言い回しを揃える。
+
+```
+動物とふれあう / 農業・収穫 / 食・料理 / ものづくり・工作 / 科学・実験 / 天体・星空
+自然・生きもの観察 / 文化・伝統 / アート・表現 / 仕事・職業体験 / 体を動かす / ガイド・解説
+```
+
+区分を足す・変えるときは `public/index.html` の `XGROUPS` も直すこと
+（合っていないと絞り込みから漏れる。`npm run check` が突き合わせている）。
+
+対象年齢の絞り込み（未就学児／小学生／中学生以上）は、台帳の**おすすめ年齢**から
+自動で読み取る（`ages`）。専用の列は要らないが、「小学生中心（未就学児も可）」
+「3～15歳」のように、年齢が分かる書き方にしておくこと。
+
 ## 訪問状況（5つ）
 
 アプリの中で選ぶもので、台帳には要らない。ピンの見た目とフィルタに直結している。

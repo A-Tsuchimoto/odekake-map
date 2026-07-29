@@ -88,6 +88,7 @@ color:var(--focus);cursor:pointer;padding:2px 4px;border-radius:4px;font-weight:
 white-space:nowrap;
 }
 .lbl button:hover{background:rgba(29,127,214,.09)}
+.lbl button:disabled{color:var(--ink-45);cursor:default;background:none}
 .lbl button:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
 .chips{display:flex;flex-wrap:wrap;gap:5px}
 .chip{
@@ -102,6 +103,13 @@ transition:background .12s,color .12s,border-color .12s;
 .chip[aria-pressed="false"]{opacity:.5}
 .chip:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .chip .n{font-variant-numeric:tabular-nums;opacity:.75;font-size:10px}
+/* 体験プログラムと対象年齢のチップは「押したものだけに絞る」。何も押していない状態が
+   ふつうなので、押していないチップを薄くしない（カテゴリの解除と見た目で区別する）。
+   その地域に0件の区分は隠すが、.chip の display が効いてしまうので打ち消す */
+.chips.opt .chip{--c:var(--ink);color:var(--ink-70)}
+.chips.opt .chip[aria-pressed="true"]{color:#fff}
+.chips.opt .chip[aria-pressed="false"]{opacity:1}
+.chip[hidden]{display:none}
 .row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px 0}
 .row label{font-size:12.5px;font-weight:500}
 .val{font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink-70)}
@@ -173,6 +181,7 @@ display:inline-block;font-size:9.5px;font-weight:900;padding:1px 5px;border-radi
 background:var(--line);color:var(--ink-70);margin-right:5px;vertical-align:1px;
 }
 .badge.done{background:#1F7A4D;color:#fff}
+.badge.exp{background:#0E7C86;color:#fff}
 .badge.want{background:#F0B429;color:#3A2A00}
 .badge.plan{background:#1D7FD6;color:#fff}
 .progress{
@@ -263,9 +272,30 @@ box-shadow:inset 0 1px 6px rgba(16,34,46,.06);
 background:#F4F7F6;border-left:3px solid var(--line);
 padding:6px 9px;font-size:calc(11px * var(--pf));color:var(--ink-70);margin:0 0 10px;border-radius:0 5px 5px 0;
 }
-.links{display:flex;gap:7px}
+/* 体験プログラム。タグ・ひとこと・対象年齢・代表的なプログラム名をまとめて出す。
+   細かい日程や料金は変わるので持たず、「体験の案内」から公式へ送る */
+.pop-exp{
+background:#F4F7F6;border:1px solid var(--line);border-radius:8px;
+padding:calc(8px * var(--pf)) calc(10px * var(--pf));margin:0 0 10px;
+}
+.pop-exp h4{
+margin:0 0 6px;font-size:calc(9.5px * var(--pf));letter-spacing:.13em;
+font-weight:700;color:var(--ink-45);
+}
+.xtags{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:7px}
+.xtags span{
+font-size:calc(10px * var(--pf));font-weight:700;color:#0E7C86;
+border:1px solid rgba(14,124,134,.35);border-radius:99px;
+padding:calc(2px * var(--pf)) calc(7px * var(--pf));
+}
+.pop-exp p{margin:0 0 6px;font-size:calc(11px * var(--pf));color:var(--ink-70);line-height:1.55}
+.pop-exp p.xage{color:var(--ink);font-weight:700}
+.pop-exp ul{margin:0;padding-left:calc(16px * var(--pf));font-size:calc(11px * var(--pf))}
+.pop-exp li{margin-bottom:2px;line-height:1.5;color:var(--ink-70)}
+.pop-exp li i{font-style:normal;color:var(--ink-45)}
+.links{display:flex;flex-wrap:wrap;gap:7px}
 .links a{
-flex:1;text-align:center;text-decoration:none;font-size:calc(11.5px * var(--pf));font-weight:700;
+flex:1 1 42%;text-align:center;text-decoration:none;font-size:calc(11.5px * var(--pf));font-weight:700;
 padding:calc(7px * var(--pf)) 4px;border-radius:7px;border:1px solid var(--line);color:var(--ink);
 }
 .links a.pri{background:var(--ink);color:#fff;border-color:var(--ink)}
@@ -341,6 +371,18 @@ width:34px;height:4px;border-radius:2px;background:var(--line);
       <div class="chips" id="cats"></div>
     </div>
     <div class="block">
+      <p class="lbl">体験プログラム
+        <span class="lbl-btns"><button id="allExp">体験ありだけ</button><button id="noExp">解除</button></span></p>
+      <div class="chips opt" id="exps"></div>
+      <p class="hint" id="expHint"></p>
+    </div>
+    <div class="block">
+      <p class="lbl">対象年齢
+        <span class="lbl-btns"><button id="noAge">解除</button></span></p>
+      <div class="chips opt" id="ages"></div>
+      <p class="hint">おすすめ年齢から読み取ったもの。どれも押していなければ絞りません</p>
+    </div>
+    <div class="block">
       <p class="lbl">条件</p>
       <div class="row"><label for="car">車で<span class="val" id="carV"></span></label></div>
       <!-- max と初期値はデータの最大値から JS が入れ直す -->
@@ -413,6 +455,17 @@ const COLORS = {
 };
 const ORDER = Object.keys(COLORS);
 const active = new Set(ORDER);
+
+/* 体験プログラムのまとまり（データ側の xg）と、対象年齢の3区分（同 ages）。
+   どちらも scripts/import-experience.py が作る値と一対一。ここに無い値が
+   データに入ると絞り込みから漏れるので、npm run check が突き合わせている。
+   カテゴリや訪問状況と違って「押したものだけに絞る」ので、初期値は空
+   （全部押した状態から始めると、タグの無いスポットが消えてしまう） */
+const XGROUPS = ["動物とふれあう","農業・収穫","食・料理","ものづくり・工作","科学・実験","天体・星空",
+  "自然・生きもの観察","文化・伝統","アート・表現","仕事・職業体験","体を動かす","ガイド・解説"];
+const XAGES = ["未就学児","小学生","中学生以上"];
+const activeXg = new Set();
+const activeAge = new Set();
 
 /* visit status: sheet value -> {css class, badge class, label} */
 const STATUS = {
@@ -536,6 +589,19 @@ function popup(s){
   const sts = SORDER.map(k =>
     `<button class="st" data-st="${k}" aria-pressed="${k===sv}">${STATUS[k].label}</button>`).join('');
 
+  /* 体験プログラム。タグと概要、代表的なプログラムまで。日程・料金・予約は
+     変わりやすいので持たず、「体験の案内」のリンクで公式に送る */
+  const xt = s.xtags || [];
+  const exp = xt.length ? `
+    <div class="pop-exp">
+      <h4>体験プログラム</h4>
+      <div class="xtags">${xt.map(t=>`<span>${esc(t)}</span>`).join('')}</div>
+      ${s.xmemo?`<p>${esc(s.xmemo)}</p>`:''}
+      ${s.xage?`<p class="xage">対象：${esc(s.xage)}</p>`:''}
+      ${(s.xprog||[]).length?`<ul>${s.xprog.map(p=>
+        `<li>${esc(p.n)}${p.a?`<i>／${esc(p.a)}</i>`:''}</li>`).join('')}</ul>`:''}
+    </div>` : '';
+
   const size = +((typeof el === 'function' && el('popSize')) ? el('popSize').value : 1);
   return `
   <div class="pop-top" style="background:${s.color}">
@@ -552,9 +618,11 @@ function popup(s){
       <dt>場所</dt><dd>${esc(s.addr)}</dd></dl>
     <p>${esc(s.desc)}</p>
     ${s.note?`<div class="pop-note">${esc(s.note)}</div>`:''}
+    ${exp}
     <div class="links">
       <a class="pri" href="${gmapUrl(s)}" target="_blank" rel="noopener">地図で開く</a>
       ${s.url?`<a href="${esc(s.url)}" target="_blank" rel="noopener">公式サイト</a>`:''}
+      ${s.xurl && s.xurl !== s.url?`<a href="${esc(s.xurl)}" target="_blank" rel="noopener">体験の案内</a>`:''}
     </div>
     <div class="rec" data-id="${s.id}">
       <button class="btn pri today ${done?'done':''}" data-today>${done?'訪問済み　日付を今日にする':'今日行った'}</button>
@@ -802,6 +870,60 @@ el('allCat').onclick = ()=> setAllCats(true);
 el('noCat').onclick = ()=> setAllCats(false);
 el('cats').querySelectorAll('.chip').forEach(b=>b.style.color='#fff');
 
+/* ---- 体験プログラム・対象年齢 ----
+   押したものが「見たいもの」。どれも押していなければ絞らない。
+   1つのスポットが複数の区分に入る（例: 工作と科学の両方）ので、
+   どれか1つでも当たれば残す。体験と年齢は掛け合わせ（両方の条件を満たすもの） */
+function optChips(boxId, keys, set){
+  const box = el(boxId);
+  box.innerHTML = keys.map(k=>
+    `<button class="chip" data-k="${esc(k)}" aria-pressed="false">${esc(k)}<span class="n">0</span></button>`).join('');
+  box.addEventListener('click', e=>{
+    const b = e.target.closest('.chip'); if(!b) return;
+    const k = b.dataset.k, on = b.getAttribute('aria-pressed')==='true';
+    b.setAttribute('aria-pressed', String(!on));
+    on ? set.delete(k) : set.add(k);
+    render();
+  });
+}
+optChips('exps', XGROUPS, activeXg);
+optChips('ages', XAGES, activeAge);
+/* 全部押す＝その地域で体験のあるスポットだけ（体験タグがあれば必ずどれかの区分に入る） */
+function setOpt(boxId, set, on){
+  set.clear();
+  el(boxId).querySelectorAll('.chip').forEach(b=>{
+    const pick = on && !b.hidden;
+    b.setAttribute('aria-pressed', String(pick));
+    if(pick) set.add(b.dataset.k);
+  });
+  render();
+}
+el('allExp').onclick = ()=> setOpt('exps', activeXg, true);
+el('noExp').onclick  = ()=> setOpt('exps', activeXg, false);
+el('noAge').onclick  = ()=> setOpt('ages', activeAge, false);
+/* 地域ごとに件数を入れ直す。0件の区分はチップごと隠す（押せるのに0件、を作らない）。
+   隠すものが選ばれていたら外す。そのままだと解除できない絞り込みが残ってしまう */
+function syncOpt(boxId, field, set){
+  const mine = regionSpots();
+  el(boxId).querySelectorAll('.chip').forEach(b=>{
+    const k = b.dataset.k;
+    const n = mine.filter(s => (s[field] || []).includes(k)).length;
+    b.querySelector('.n').textContent = n;
+    b.hidden = !n;
+    if(!n && set.has(k)){ set.delete(k); b.setAttribute('aria-pressed','false'); }
+  });
+}
+function syncExp(){
+  syncOpt('exps', 'xg', activeXg);
+  syncOpt('ages', 'ages', activeAge);
+  const n = regionSpots().filter(s => (s.xg || []).length).length;
+  const has = !!n;
+  el('allExp').disabled = el('noExp').disabled = !has;
+  el('expHint').textContent = has
+    ? `この地域で体験プログラムがあるのは ${n} 件。押すと、その体験があるスポットだけになります`
+    : 'この地域はまだ体験の情報がありません';
+}
+
 function bindRange(id, key, fmt){
   const r = el(id), v = el(id+'V');
   const upd = ()=>{ state[key] = +r.value; v.textContent = fmt(+r.value); render(); };
@@ -889,6 +1011,8 @@ function visible(s){
   if(state.train<TRAIN_MAX && (!s.t1 || s.t1>state.train)) return false;
   if(state.rainOnly && !['◎','○'].includes(s.rain)) return false;
   if(state.month && !(s.months || []).includes(state.month)) return false;
+  if(activeXg.size && !(s.xg || []).some(g => activeXg.has(g))) return false;
+  if(activeAge.size && !(s.ages || []).some(a => activeAge.has(a))) return false;
   return true;
 }
 /* 名前のラベルは、常時表示にすると1つずつDOMを作るので数が効く。
@@ -965,7 +1089,9 @@ function draw(){
     <button class="item" data-id="${s.id}" style="--c:${s.color}">
       <span class="bar"></span><span class="nm">${
         statusOf(s)!=='候補' ? `<span class="badge ${STATUS[statusOf(s)].tone}">${STATUS[statusOf(s)].label}</span>` : ''
-      }${onMapAble(s) ? '' : '<span class="badge nopos">地図なし</span>'}${esc(s.name)}</span>
+      }${onMapAble(s) ? '' : '<span class="badge nopos">地図なし</span>'}${
+        (s.xg || []).length ? '<span class="badge exp">体験</span>' : ''
+      }${esc(s.name)}</span>
       <span class="mt">車${s.c1||'–'}分</span>
       <span class="sub">${esc(s.cat)}・${esc(s.addr)}${s.rain?'・雨'+s.rain:''}</span>
     </button>`).join('')
@@ -974,6 +1100,8 @@ function draw(){
         : !activeStatus.size ? '訪問状況が1つも選ばれていません。見たいものをタップするか、「すべて表示」で戻せます。'
         : '条件に合うスポットがありません。' + (state.month
             ? state.month + '月がおすすめのスポットだけに絞っています。月を「指定なし」に戻すか、' : '')
+          + (activeXg.size ? '体験プログラムで絞っています。「解除」で戻せます。' : '')
+          + (activeAge.size ? '対象年齢で絞っています。「解除」で戻せます。' : '')
           + '所要時間をゆるめるか、カテゴリを追加してください。'
       }</p>`;
 
@@ -1138,6 +1266,7 @@ function setRegion(id, moveMap){
   el('ringLbl').textContent = HOME.name + 'からの距離の輪';
   el('total').textContent = regionSpots().length;
   syncMonth();
+  syncExp();
   drawHome();
   render();
   if(moveMap) fitRegion();

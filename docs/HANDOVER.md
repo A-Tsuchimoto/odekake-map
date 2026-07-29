@@ -4,7 +4,7 @@
 何をするアプリかは [README](../README.md)、コードを触るときの決まりは
 [CLAUDE.md](../CLAUDE.md)、台帳（Excel）の作り方は [docs/LEDGER.md](LEDGER.md)。
 
-最終更新: 2026-07-28
+最終更新: 2026-07-29
 
 ---
 
@@ -27,6 +27,13 @@
 新しい台帳から93件を入れ直した（関東52・北海道12・名古屋12・沖縄9・小田原8）。
 新IDは `KNT-MEN-001` `SPK-YKN-001` のような形式で、座標が入っているので地図にも出る。
 
+**体験プログラムのタグを2026-07-29に足した**。調査JSON（685件分）から255件にタグが付き、
+12区分（`xg`）と対象年齢3区分（`ages`、全685件）で絞り込めるようにした。
+内訳は関東93・北海道58・沖縄40・名古屋38・小田原26。取り込みは
+`python3 scripts/import-experience.py 調査.json`。区分の一覧と入力の形は docs/LEDGER.md。
+**カテゴリや訪問状況と選び方が逆**（押したものだけに絞る／何も押さなければ絞らない）なので、
+チップの見た目も別扱いにしてある（`.chips.opt`）。
+
 ## 2. Cloudflare 側の設定（コードに書けないもの）
 
 | もの | 値・場所 |
@@ -45,7 +52,7 @@
 
 ```bash
 npm install
-npm run dev            # http://localhost:8788（wrangler dev）
+npm run dev            # http://localhost:8787（wrangler dev）
 npm run check          # データ + wrangler.toml + _headers の検査。CIもこれ
 npm run build:spots    # data/*.json → public/spots.js
 npm run deploy         # 手元からデプロイしたいとき（普段はpushで足りる）
@@ -56,6 +63,9 @@ python3 scripts/import-ledger.py 台帳.xlsx --by-area                # エリ�
 python3 scripts/import-ledger.py 台帳.xlsx --by-area --replace-cat 飲食店   # カテゴリごと差し替え
 python3 scripts/import-ledger.py --purge-cat 飲食店                  # 全地域から消すだけ
 python3 scripts/import-ledger.py 台帳.xlsx --only season             # その列だけ反映
+
+# 体験プログラムの調査JSON（IDで突き合わせ。体験まわりの項目だけ入れ直す）
+python3 scripts/import-experience.py 体験調査.json
 ```
 
 `data/spots.json` `data/regions.json` を直したら **必ず** `npm run build:spots`。
@@ -115,12 +125,18 @@ await ctx.route("https://*.basemaps.cartocdn.com/**", r => r.abort());   // タ�
 - **カテゴリは12分類で固定**。台帳ごとの表記ゆれは取り込み時に寄せる
 - **スポットIDは絶対に変えない**。記録がIDで紐づいているため
 - **推測でデータを埋めない**。評価も座標も、無いものは空のまま持つ
+- **変わりやすいものは持たない**。体験の日程・料金・予約方法は取り込まず、
+  一次情報のURL（`xurl`）に送る
+- **タグの絞り込みは「押したものだけ」**。全部押した状態から始めると、
+  タグの無いスポットが消えてしまう
 - **1枚のHTMLを保つ**。ビルド工程を入れない
 
 ## 7. 残っている課題
 
 - **飲食店のGoogle評価が未取得**（台帳が空欄）。沖縄のスポット125件も同様。
   台帳に入ったら `--by-area --replace-cat 飲食店` で差し替える
+- **体験タグの無い430件**。調査で「該当なし」だったもので、飲食店もここに入る。
+  新しく体験を見つけたら、そのIDだけのJSONを作って取り込み直せばよい
 - **旧飲食店IDの記録がKVに残る**。`KNT-FOD-*` に記録を付けていた場合、
   新IDとは紐づかないので表示されない（害はないが消えない）
 - **オフラインで付けた記録が自動再送されない**。端末に控えるだけなので、

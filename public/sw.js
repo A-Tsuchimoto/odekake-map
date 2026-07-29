@@ -8,8 +8,11 @@
    タイルは <img> から no-cors で取られるので response.ok が false（type:'opaque'）になる。
    ここを見落とすと1枚もキャッシュされず、圏外で真っ白な地図になる。 */
 /* v2 のキャッシュには Leaflet が入っていない（CSPのconnect-srcで弾かれていた）。
-   名前を変えて作り直させる。 */
-const SHELL_CACHE = 'odekake-map-v3';
+   名前を変えて作り直させる。
+   v4: spots.js に体験タグを足した。spots.js はキャッシュ優先（裏で更新）なので、
+   名前を変えないと、新しい index.html と古い spots.js の組み合わせで1回開くことになる
+   （体験のチップが全部0件で消える）。データの形を変えたときは名前も上げること。 */
+const SHELL_CACHE = 'odekake-map-v4';
 const TILE_CACHE = 'odekake-tiles-v1';
 const TILE_MAX = 600;
 

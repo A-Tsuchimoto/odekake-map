@@ -67,14 +67,43 @@ for (const r of regions) {
   }
 }
 
+const html = readFileSync(HTML, "utf8");
+
 /** index.html の COLORS に載っているカテゴリだけが正。載っていないと灰色ピンになる */
 function knownCategories() {
-  const m = readFileSync(HTML, "utf8").match(/const COLORS\s*=\s*\{([\s\S]*?)\};/);
+  const m = html.match(/const COLORS\s*=\s*\{([\s\S]*?)\};/);
   if (!m) return null;
   return new Set([...m[1].matchAll(/"([^"]+)"\s*:/g)].map((x) => x[1]));
 }
 const cats = knownCategories();
 if (!cats) fail("index.html の COLORS を読めなかった。カテゴリ名の確認を飛ばした");
+
+/** 体験の区分（xg）と対象年齢（ages）も、index.html の一覧に無い値は絞り込みから漏れる */
+function knownList(name) {
+  const m = html.match(new RegExp(`const ${name}\\s*=\\s*\\[([\\s\\S]*?)\\];`));
+  if (!m) return null;
+  return new Set([...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]));
+}
+const xgroups = knownList("XGROUPS");
+const xages = knownList("XAGES");
+if (!xgroups || !xages) fail("index.html の XGROUPS / XAGES を読めなかった");
+
+/** 文字列の配列。中身が index.html 側の一覧に載っているかも見る */
+function checkTags(at, s, key, allowed) {
+  const v = s[key];
+  if (v === undefined) return;
+  if (!Array.isArray(v) || !v.length) {
+    fail(`${at}: ${key} は1件以上の配列にするか、キーごと省くこと`);
+    return;
+  }
+  if (v.some((x) => typeof x !== "string" || !x.trim())) fail(`${at}: ${key} は文字列の配列で`);
+  else if (new Set(v).size !== v.length) fail(`${at}: ${key} に同じ値が2回入っている`);
+  if (allowed) {
+    for (const x of v) {
+      if (!allowed.has(x)) fail(`${at}: ${key} の「${x}」は index.html の一覧にない`);
+    }
+  }
+}
 
 const seenId = new Set();
 const seenPos = new Map();
@@ -132,6 +161,25 @@ for (const s of spots) {
   }
   if (s.t1 != null && s.t2 != null && s.t1 > s.t2) fail(`${at}: t1 が t2 より大きい`);
   if (s.c1 != null && s.c2 != null && s.c1 > s.c2) fail(`${at}: c1 が c2 より大きい`);
+
+  /* 体験プログラム（scripts/import-experience.py が入れる）。
+     xtags が台帳そのまま、xg が絞り込み用のまとまり。片方だけあると
+     「ポップアップには出るのに絞り込めない」ものができる */
+  checkTags(at, s, "xtags", null);
+  checkTags(at, s, "xg", xgroups);
+  checkTags(at, s, "ages", xages);
+  if (!!s.xtags !== !!s.xg) fail(`${at}: xtags と xg は両方そろえること`);
+  for (const k of ["xmemo", "xage", "xurl"]) {
+    if (s[k] != null && typeof s[k] !== "string") fail(`${at}: ${k} は文字列で`);
+    if (s[k] != null && !s.xtags) fail(`${at}: ${k} があるのに xtags がない`);
+  }
+  if (s.xurl && !/^https?:\/\//.test(s.xurl)) fail(`${at}: xurl は http(s) のURLで（今: ${s.xurl}）`);
+  if (s.xprog !== undefined) {
+    if (!Array.isArray(s.xprog) || !s.xprog.length) fail(`${at}: xprog は1件以上の配列にするか、キーごと省くこと`);
+    else if (s.xprog.some((p) => !p || typeof p.n !== "string" || !p.n.trim())) {
+      fail(`${at}: xprog の各項目は {n:プログラム名, a:対象年齢} の形で`);
+    } else if (!s.xtags) fail(`${at}: xprog があるのに xtags がない`);
+  }
 }
 
 const js =
