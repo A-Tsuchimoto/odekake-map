@@ -90,6 +90,27 @@ white-space:nowrap;
 .lbl button:hover{background:rgba(29,127,214,.09)}
 .lbl button:disabled{color:var(--ink-45);cursor:default;background:none}
 .lbl button:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+/* さがす。パネルのいちばん上に置く（探すのがいちばん速い道なので） */
+.qbox{display:flex;gap:5px;align-items:center}
+.qbox input{
+flex:1;min-width:0;font:inherit;font-size:12.5px;color:var(--ink);
+padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:#F8FAF9;
+-webkit-appearance:none;appearance:none;
+}
+/* ブラウザごとに出たり出なかったりする×を消して、自前のものに揃える */
+.qbox input::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none}
+.qbox input:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+.qbox button{
+flex:none;width:30px;height:30px;border-radius:8px;border:1px solid var(--line);
+background:#fff;color:var(--ink-45);font:inherit;font-size:15px;line-height:1;cursor:pointer;
+}
+.qbox button:hover{background:#F4F7F6;color:var(--ink)}
+.qbox button:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+#qHint button{
+font:inherit;font-size:10.5px;font-weight:700;color:var(--focus);cursor:pointer;
+border:0;background:none;padding:1px 3px;border-radius:4px;
+}
+#qHint button:hover{background:rgba(29,127,214,.09)}
 .chips{display:flex;flex-wrap:wrap;gap:5px}
 .chip{
 display:inline-flex;align-items:center;gap:5px;
@@ -343,6 +364,16 @@ width:34px;height:4px;border-radius:2px;background:var(--line);
   <button class="sheet-btn" id="sheetBtn" aria-expanded="false">絞り込みと一覧</button>
   <div class="panel-scroll">
     <div class="block">
+      <p class="lbl"><label for="q">さがす</label>
+        <span class="lbl-btns"><button id="qFit" hidden>地図を合わせる</button></span></p>
+      <div class="qbox">
+        <input type="search" id="q" placeholder="施設名・地名・やりたいこと" autocomplete="off"
+          enterkeyhint="search" aria-describedby="qHint">
+        <button id="qClear" hidden aria-label="さがす言葉を消す">×</button>
+      </div>
+      <p class="hint" id="qHint"></p>
+    </div>
+    <div class="block">
       <p class="lbl">おでかけの記録</p>
       <div class="conn">
         <p class="status-msg" id="msg">ピンをタップして「今日行った」を押すだけ。記録は自動で保存されます。</p>
@@ -467,6 +498,9 @@ const XGROUPS = ["動物とふれあう","農業・収穫","食・料理","も�
 const XAGES = ["未就学児","小学生","中学生以上"];
 const activeXg = new Set();
 const activeAge = new Set();
+
+/* さがす言葉。空なら絞らない。render() より先に呼ばれるのでここで用意する */
+let terms = [];
 
 /* visit status: sheet value -> {css class, badge class, label} */
 const STATUS = {
@@ -914,6 +948,55 @@ function syncOpt(boxId, field, set){
     if(!n && set.has(k)){ set.delete(k); b.setAttribute('aria-pressed','false'); }
   });
 }
+/* ---- さがす ----
+   施設名だけだと「ロープウェイ」「いちご狩り」で探せない。住所・概要・注意書き・
+   体験のタグやプログラム名まで一緒に見る。カタカナとひらがな、全角と半角の違いは
+   吸収する（「サンゴ」でも「さんご」でも当たるように）。
+   言葉を空けて2つ書いたら、両方に当たるものだけ残す */
+const toHira = t => t.replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
+const norm = t => toHira(String(t).normalize('NFKC').toLowerCase());
+function hay(s){
+  if(s.q) return s.q;
+  return (s.q = norm([s.name, s.sub, s.cat, s.addr, s.desc, s.note, s.age, s.season,
+    (s.xtags || []).join(' '), s.xmemo, s.xage,
+    (s.xprog || []).map(p => p.n).join(' ')].filter(Boolean).join(' ')));
+}
+const hitQ = s => !terms.length || terms.every(t => hay(s).includes(t));
+function setQuery(v){
+  if(el('q').value !== v) el('q').value = v;
+  terms = norm(v).split(/\s+/).filter(Boolean);
+  el('qClear').hidden = !v;
+  render();
+}
+el('q').addEventListener('input', e => setQuery(e.target.value));
+el('q').addEventListener('keydown', e=>{
+  if(e.key === 'Escape'){ setQuery(''); e.stopPropagation(); }
+});
+el('qClear').onclick = ()=>{ setQuery(''); el('q').focus(); };
+/* 見つけたものに地図を合わせる。勝手に動かすと目で追えなくなるので、押したときだけ */
+el('qFit').onclick = ()=>{
+  const pts = SPOTS.filter(visible).filter(onMapAble).map(s => [s.lat, s.lng]);
+  if(!pts.length) return;
+  if(window.innerWidth <= 720) el('panel').classList.remove('open');
+  map.fitBounds(L.latLngBounds(pts), {
+    padding:[60,60], paddingTopLeft:[window.innerWidth > 720 ? 330 : 40, 80], maxZoom:15});
+};
+/* 他の地域にある、と出したときの飛び先。言葉はそのまま持っていく */
+el('qHint').addEventListener('click', e=>{
+  const b = e.target.closest('[data-jump]'); if(!b) return;
+  setRegion(b.dataset.jump, true);
+  store.set(RKEY, region.id);
+});
+/* PCで「/」を押したら検索へ。入力中は邪魔しない */
+document.addEventListener('keydown', e=>{
+  if(e.key !== '/' || e.metaKey || e.ctrlKey) return;
+  const t = e.target;
+  if(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
+  e.preventDefault();
+  if(window.innerWidth <= 720) el('panel').classList.add('open');
+  el('q').focus();
+});
+
 function syncExp(){
   syncOpt('exps', 'xg', activeXg);
   syncOpt('ages', 'ages', activeAge);
@@ -1006,6 +1089,7 @@ bindToggle('rings', on=> on ? ringLayer.addTo(map) : map.removeLayer(ringLayer))
 /* render */
 function visible(s){
   if(s.region !== region.id) return false;
+  if(!hitQ(s)) return false;
   if(!active.has(s.cat)) return false;
   if(!activeStatus.has(statusOf(s))) return false;
   if(state.car<CAR_MAX && (!s.c1 || s.c1>state.car)) return false;
@@ -1075,6 +1159,25 @@ function draw(){
   });
   el('bar').style.width = (mine.length ? cnt['訪問済み'] / mine.length * 100 : 0) + '%';
 
+  /* さがすの案内。この地域に無いときは、他の地域の件数を出して飛べるようにする
+     （地域は同時に表示できないので、そのままだと「無い」ようにしか見えない） */
+  el('qFit').hidden = !terms.length || !vis.some(onMapAble);
+  const hint = el('qHint');
+  if(!terms.length){
+    hint.textContent = '施設名・地名のほか、概要や体験のタグも見ます（例: いちご狩り、ロープウェイ）';
+  } else if(vis.length){
+    hint.textContent = `${vis.length} 件見つかりました`;
+  } else if(mine.filter(hitQ).length){
+    hint.textContent = `この地域に ${mine.filter(hitQ).length} 件ありますが、他の絞り込みで消えています`;
+  } else {
+    const other = REGIONS.filter(r => r.id !== region.id)
+      .map(r => [r, SPOTS.filter(s => s.region === r.id && hitQ(s)).length]).filter(([,n]) => n);
+    hint.innerHTML = other.length
+      ? 'この地域にはありません。' +
+        other.map(([r,n]) => `<button data-jump="${esc(r.id)}">${esc(r.name)}に${n}件</button>`).join('')
+      : 'どの地域にも見つかりませんでした。ひらがなだけにすると当たることがあります';
+  }
+
   /* 並びと状況が同じなら組み直さない。スマホでシートを閉じている間も作らない */
   const sig = vis.map(s => s.id + statusOf(s)).join();
   if(!listShown()){ listSig = null; return; }
@@ -1099,7 +1202,10 @@ function draw(){
     : `<p class="empty">${
         !active.size ? 'カテゴリが1つも選ばれていません。見たいものをタップするか、「すべて表示」で戻せます。'
         : !activeStatus.size ? '訪問状況が1つも選ばれていません。見たいものをタップするか、「すべて表示」で戻せます。'
-        : '条件に合うスポットがありません。' + (state.month
+        : terms.length && !mine.filter(hitQ).length
+          ? `「${esc(el('q').value.trim())}」に当てはまるスポットは、この地域にありません。`
+        : '条件に合うスポットがありません。' + (terms.length
+            ? `「${esc(el('q').value.trim())}」でさがしています。言葉を消すか、` : '') + (state.month
             ? state.month + '月がおすすめのスポットだけに絞っています。月を「指定なし」に戻すか、' : '')
           + (activeXg.size ? '体験プログラムで絞っています。「解除」で戻せます。' : '')
           + (activeAge.size ? '対象年齢で絞っています。「解除」で戻せます。' : '')
