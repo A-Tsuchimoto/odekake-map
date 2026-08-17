@@ -142,6 +142,12 @@ for (const s of spots) {
     else seenPos.set(key, at);
   }
 
+  /* approx = 座標が町丁目の代表点（住所から引いたもの）。ポップアップに「およその位置」と出す */
+  if (s.approx !== undefined) {
+    if (s.approx !== true) fail(`${at}: approx は true だけ。違うならキーごと省く`);
+    else if (typeof s.lat !== "number") fail(`${at}: approx があるのに座標がない`);
+  }
+
   if (s.rain && !RAIN.includes(s.rain)) fail(`${at}: rain は ${RAIN.join("/")} のどれか（今: ${s.rain}）`);
 
   /* おすすめの月。season が台帳の原文、months が絞り込み用に読み取った月 */

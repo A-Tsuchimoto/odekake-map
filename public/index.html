@@ -288,6 +288,8 @@ box-shadow:inset 0 1px 6px rgba(16,34,46,.06);
 .facts{display:grid;grid-template-columns:auto 1fr;gap:3px calc(10px * var(--pf));margin:0 0 9px;font-size:calc(11.5px * var(--pf))}
 .facts dt{color:var(--ink-45);font-weight:700;white-space:nowrap}
 .facts dd{margin:0;font-variant-numeric:tabular-nums}
+/* 住所から引いた座標のスポット。ピンは町名の代表点なので、そのことを断っておく */
+.facts .approx{display:block;font-style:normal;color:var(--ink-45);font-size:calc(10px * var(--pf))}
 .pop-body p{margin:0 0 8px;color:var(--ink-70);font-size:calc(11.5px * var(--pf))}
 .pop-note{
 background:#F4F7F6;border-left:3px solid var(--line);
@@ -437,7 +439,8 @@ width:34px;height:4px;border-radius:2px;background:var(--line);
       <div class="row"><label for="rings" id="ringLbl">起点からの距離の輪</label><button class="toggle" id="rings" aria-pressed="true"></button></div>
     </div>
     <div class="block list">
-      <p class="lbl list-head">近い順（車の最短時間）</p>
+      <p class="lbl list-head">近い順（車の最短時間）
+        <span class="lbl-btns"><button id="noPos" hidden></button></span></p>
       <div id="list"></div>
     </div>
   </div>
@@ -650,7 +653,8 @@ function popup(s){
   <div class="pop-body">
     <dl class="facts">${f.map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}
       ${rec.map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}
-      <dt>場所</dt><dd>${esc(s.addr)}</dd></dl>
+      <dt>場所</dt><dd>${esc(s.addr)}${
+        s.approx ? '<i class="approx">地図の位置はおよそ（町名から）</i>' : ''}</dd></dl>
     <p>${esc(s.desc)}</p>
     ${s.note?`<div class="pop-note">${esc(s.note)}</div>`:''}
     ${exp}
@@ -1159,6 +1163,12 @@ function draw(){
   });
   el('bar').style.width = (mine.length ? cnt['訪問済み'] / mine.length * 100 : 0) + '%';
 
+  /* 座標の無いスポットは地図に出ないので、一覧のどこかに埋もれて気づけない。
+     見出しに件数を出して、押したらその1件目を開くようにする */
+  const nopos = vis.filter(s => !onMapAble(s));
+  el('noPos').hidden = !nopos.length;
+  el('noPos').textContent = `地図なし ${nopos.length}件`;
+
   /* さがすの案内。この地域に無いときは、他の地域の件数を出して飛べるようにする
      （地域は同時に表示できないので、そのままだと「無い」ようにしか見えない） */
   el('qFit').hidden = !terms.length || !vis.some(onMapAble);
@@ -1238,6 +1248,17 @@ el('list').addEventListener('click',e=>{
   map.once('moveend', open);
   setTimeout(open, 800);
 });
+
+/* 見出しの「地図なし ◯件」。一覧の中から1件目を探して開く */
+el('noPos').onclick = ()=>{
+  const item = [...el('list').querySelectorAll('.item')].find(b=>{
+    const s = SPOTS.find(x => x.id === b.dataset.id);
+    return s && !onMapAble(s);
+  });
+  if(!item) return;
+  item.scrollIntoView({block:'center', behavior:'smooth'});
+  if(cardId !== item.dataset.id) openCard(item, SPOTS.find(x => x.id === item.dataset.id));
+};
 
 /* 座標の無いスポットを一覧の中で開く。中身はポップアップと同じものを使う。
    開いているカードは cardId で覚えておき、一覧を組み直すときは同じ節点を挿し直す

@@ -2,6 +2,7 @@
 """スポットの追加分をJSONで受け取って data/spots.json に入れる。
 
     python3 scripts/import-spots-json.py 追加.json
+    python3 scripts/import-spots-json.py 追加.json --geocode   # 座標が無いものを住所から補う
 
 台帳（Excel）ではなく、調べたものをそのままJSONでもらったとき用。
 IDが既にあれば上書き、無ければその地域のいちばん後ろに足す。
@@ -18,6 +19,11 @@ primary_source_urls）。読み替えは scripts/import-experience.py と同じ�
 
 住所は「都道府県＋市区町村」に詰める（一覧に出るので番地は落とす）。
 rate は空・0・null なら持たない（推測で埋めない）。
+
+`--geocode` を付けると、緯度経度の無いスポットだけ、住所（番地を落とす前のもの）から
+**町丁目の代表点**を引いて入れる（scripts/geocode-jp.py）。誤差は数十〜200m程度なので
+`approx: true` を一緒に付けて、ポップアップに「およその位置」と出す。
+建物の正確な座標が分かったら、同じIDで座標入りのJSONを流し直せば上書きされる。
 """
 import importlib.util, json, sys
 from pathlib import Path
@@ -36,14 +42,19 @@ def load(name):
 
 ledger = load("import-ledger")        # 住所の詰め方とカテゴリ名を借りる
 exp = load("import-experience")       # 体験の区分と年齢の読み取りを借りる
+geo = load("geocode-jp")              # --geocode のときだけ使う
 
 # 持つキー。ここに無いものは捨てる
 KEYS = ["id", "cat", "sub", "name", "addr", "t1", "t2", "c1", "c2",
         "rain", "desc", "age", "rate", "note", "url", "lat", "lng", "region", "season"]
 NUM = {"t1", "t2", "c1", "c2", "lat", "lng", "rate"}
+# data/spots.json の中の並び順
+ORDER = ["id", "cat", "sub", "name", "addr", "t1", "t2", "c1", "c2", "rain", "desc", "age",
+         "rate", "note", "url", "lat", "lng", "approx", "region", "season", "months",
+         "xtags", "xg", "xmemo", "xage", "xprog", "xurl", "ages"]
 
 
-def clean(x):
+def clean(x, do_geocode=False):
     s = {}
     for k in KEYS:
         v = x.get(k)
@@ -65,8 +76,18 @@ def clean(x):
                          "index.html の COLORS と import-ledger.py の CANON に足すこと")
             v = ledger.CANON[v]
         if k == "addr":
-            v = ledger.area(v, None)
+            v = ledger.area(v, None)       # 元の番地入りは x["addr"] に残っている
         s[k] = v
+
+    # 座標が無いものだけ、住所から町丁目の代表点を引く。ずれるので印を付けておく
+    if do_geocode and "lat" not in s and x.get("addr"):
+        got = geo.geocode(x["addr"])
+        if got:
+            s["lat"], s["lng"], town = got
+            s["approx"] = True
+            print(f"  座標を補った: {s.get('name')} → {town}の代表点 ({s['lat']}, {s['lng']})")
+        else:
+            print(f"!! 住所から座標を引けなかった: {s.get('name')}（{x['addr']}）")
 
     if s.get("season"):
         months = ledger.months(s["season"])
@@ -112,13 +133,16 @@ def clean(x):
     ages = exp.ages_of(s.get("age"))
     if ages:
         s["ages"] = ages
-    return s
+    # 既存の並びに揃える（差分が読みやすいように）
+    return {k: s[k] for k in ORDER if k in s}
 
 
 def main():
-    if len(sys.argv) < 2:
-        sys.exit("使い方: python3 scripts/import-spots-json.py 追加.json")
-    src = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    do_geocode = "--geocode" in sys.argv
+    if not args:
+        sys.exit("使い方: python3 scripts/import-spots-json.py 追加.json [--geocode]")
+    src = json.loads(Path(args[0]).read_text(encoding="utf-8"))
     if isinstance(src, dict):
         src = [src]
     cur = json.loads(SPOTS.read_text(encoding="utf-8"))
@@ -126,7 +150,7 @@ def main():
 
     added, updated = [], []
     for x in src:
-        s = clean(x)
+        s = clean(x, do_geocode)
         for k in ("id", "cat", "name", "region"):
             if not s.get(k):
                 sys.exit(f"{k} がない: {x.get('id') or x.get('name')}")
