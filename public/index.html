@@ -532,7 +532,9 @@ const store = {
 const map = L.map('map',{zoomControl:false, minZoom:8, maxZoom:17}).setView([35.50,139.62],10);
 L.control.zoom({position:'bottomright'}).addTo(map);
 const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
-  attribution:'&copy; OpenStreetMap contributors &copy; CARTO', subdomains:'abcd', maxZoom:19,
+  /* 一部のスポットの座標は住所から引いている（CC BY 4.0 なので出どころを出す。docs/COORDS.md） */
+  attribution:'&copy; OpenStreetMap contributors &copy; CARTO ｜ 座標一部 <a href="https://github.com/geolonia/japanese-addresses" target="_blank" rel="noopener">Geolonia</a> (CC BY 4.0)',
+  subdomains:'abcd', maxZoom:19,
   updateWhenZooming:false, keepBuffer:3
 }).addTo(map);
 let tileFails = 0;

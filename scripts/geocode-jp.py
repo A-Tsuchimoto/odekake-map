@@ -7,7 +7,9 @@
 Google Maps などの地図APIには出られないので、GitHub にある
 Geolonia の住所データ（国土交通省「位置参照情報」由来、CC BY 4.0）を使う。
 持っているのは**町丁目の代表点**なので、番地までは当たらない。
-実測との差は数十〜200m程度（同じ街区の中には入る）。
+
+    「◯◯二丁目」まである住所（市街地）  … 実測との差は数十〜250m。ピンとして使える
+    「字◯◯」しかない住所（郡部の村など） … 450m〜4.8km ずれた。**使わない方がよい**
 
     https://github.com/geolonia/japanese-addresses
 
@@ -76,7 +78,7 @@ def split_addr(addr):
     pref, rest = m.group(1), a[m.end():]
     m = re.match(r"(.{1,8}?郡)(.{1,8}?[町村])(.*)$", rest)
     if m:
-        return pref, m.group(2), m.group(3)      # 郡は市区町村名に含めない（データ側がそう）
+        return pref, m.group(1) + m.group(2), m.group(3)   # データ側は「国頭郡恩納村」と郡付き
     m = re.match(CITY + r"(.*)$", rest)
     if not m:
         return None
@@ -86,6 +88,12 @@ def split_addr(addr):
     if city.endswith("市") and m2:
         city, tail = city + m2.group(1), m2.group(2)
     return pref, city, tail
+
+
+def level_of(town):
+    """当たった町名の細かさ。丁目・条まであるものは街区くらいの広さで実用になるが、
+    郡部の「字◯◯」は集落まるごとなので、代表点は数百m〜数km ずれる"""
+    return "丁目" if re.search(r"(丁目|条|線)", town) else "字"
 
 
 def geocode(addr):
@@ -99,17 +107,20 @@ def geocode(addr):
     except Exception as e:
         print(f"!! {pref}{city} の住所データを取れなかった: {e}", file=sys.stderr)
         return None
-    tail = tail.replace("大字", "").replace("字", "")
+    """住所側とデータ側で「字」の有無が揃わない（データは「字谷茶」、住所は「谷茶」など）ので
+       どちらも落として突き合わせる"""
+    aza = lambda s: re.sub(r"^(大字|字)", "", s)
     best = None
     for t in towns:
-        for name in (t["town"], loose(t["town"])):
-            if not name or not tail.startswith(name):
-                continue
-            nxt = tail[len(name):len(name) + 1]
-            if nxt.isdigit():       # 「西8」で「西80」に当たらないように
-                continue
-            if not best or len(name) > best[0]:
-                best = (len(name), t)
+        for name in {t["town"], loose(t["town"])}:
+            for nm, tl in ((name, tail), (aza(name), aza(tail))):
+                if not nm or not tl.startswith(nm):
+                    continue
+                # 丁目・条の数字で終わる町名だけ、次が数字なら別の町（西8 と 西80）
+                if nm[-1:].isdigit() and tl[len(nm):len(nm) + 1].isdigit():
+                    continue
+                if not best or len(nm) > best[0]:
+                    best = (len(nm), t)
     if not best:
         return None
     t = best[1]
@@ -124,7 +135,8 @@ def main():
         got = geocode(addr)
         if got:
             lat, lng, town = got
-            print(f"{lat}, {lng}\t{town}（町丁目の代表点）\t{addr}")
+            rough = "  ← 字なので数百m〜数kmずれる。使わない方がよい" if level_of(town) == "字" else ""
+            print(f"{lat}, {lng}\t{town}の代表点\t{addr}{rough}")
         else:
             ng += 1
             print(f"—\t引けなかった\t{addr}")

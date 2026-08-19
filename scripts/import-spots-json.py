@@ -79,15 +79,19 @@ def clean(x, do_geocode=False):
             v = ledger.area(v, None)       # 元の番地入りは x["addr"] に残っている
         s[k] = v
 
-    # 座標が無いものだけ、住所から町丁目の代表点を引く。ずれるので印を付けておく
+    # 座標が無いものだけ、住所から町丁目の代表点を引く。ずれるので印を付けておく。
+    # 「字◯◯」しか無い住所は数kmずれるので、既定では入れない（--geocode-aza で入る）
     if do_geocode and "lat" not in s and x.get("addr"):
         got = geo.geocode(x["addr"])
-        if got:
+        if not got:
+            print(f"!! 住所から座標を引けなかった: {s.get('name')}（{x['addr']}）")
+        elif geo.level_of(got[2]) == "字" and do_geocode != "aza":
+            print(f"!! 粗すぎるので入れなかった: {s.get('name')} → {got[2]}（数百m〜数kmずれる）。"
+                  "どうしても入れるなら --geocode-aza")
+        else:
             s["lat"], s["lng"], town = got
             s["approx"] = True
             print(f"  座標を補った: {s.get('name')} → {town}の代表点 ({s['lat']}, {s['lng']})")
-        else:
-            print(f"!! 住所から座標を引けなかった: {s.get('name')}（{x['addr']}）")
 
     if s.get("season"):
         months = ledger.months(s["season"])
@@ -139,9 +143,9 @@ def clean(x, do_geocode=False):
 
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    do_geocode = "--geocode" in sys.argv
+    do_geocode = "aza" if "--geocode-aza" in sys.argv else ("--geocode" in sys.argv)
     if not args:
-        sys.exit("使い方: python3 scripts/import-spots-json.py 追加.json [--geocode]")
+        sys.exit("使い方: python3 scripts/import-spots-json.py 追加.json [--geocode|--geocode-aza]")
     src = json.loads(Path(args[0]).read_text(encoding="utf-8"))
     if isinstance(src, dict):
         src = [src]

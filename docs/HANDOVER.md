@@ -2,7 +2,8 @@
 
 別のスレッド／別の人がこのリポジトリを引き継ぐときに、最初に読むもの。
 何をするアプリかは [README](../README.md)、コードを触るときの決まりは
-[CLAUDE.md](../CLAUDE.md)、台帳（Excel）の作り方は [docs/LEDGER.md](LEDGER.md)。
+[CLAUDE.md](../CLAUDE.md)、台帳（Excel）の作り方は [docs/LEDGER.md](LEDGER.md)、
+座標の入れ方と住所からの推定は [docs/COORDS.md](COORDS.md)。
 
 最終更新: 2026-07-29
 
@@ -88,6 +89,7 @@ python3 scripts/import-experience.py 体験調査.json
 python3 scripts/import-spots-json.py 追加.json
 python3 scripts/import-spots-json.py 追加.json --geocode   # 座標が無いものを住所から補う
 python3 scripts/geocode-jp.py 沖縄県那覇市壺屋1-6-16        # 住所→緯度経度を見るだけ
+                                                          # 手順と精度は docs/COORDS.md
 ```
 
 `data/spots.json` `data/regions.json` を直したら **必ず** `npm run build:spots`。
@@ -167,6 +169,6 @@ await ctx.route("https://*.basemaps.cartocdn.com/**", r => r.abort());   // タ�
   復帰後に手動で「つなぐ」が要る。直すなら sw.js の Background Sync か `online` イベント
 - 記録は毎回まるごとPOST。件数が増えたら差分更新を検討（競合の扱いを先に決めること）
 - KVは結果整合性。複数端末で同時に編集する使い方に広げるなら D1 へ
-- **`approx` の4件**（新しい二郎系）。町名の代表点なので数十〜200mずれる。
-  正確な座標が分かったら同じIDで流し直す
+- **`approx` の4件**（新しい二郎系）。町名の代表点なので数十〜250mずれる。
+  正確な座標が分かったら同じIDで流し直す（docs/COORDS.md）
 - 記録のCSV書き出し（JSONは実装済み）、写真添付（R2）、再訪記録は未着手

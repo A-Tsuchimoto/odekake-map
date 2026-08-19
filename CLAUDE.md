@@ -4,7 +4,7 @@
 （静的アセット + `src/index.js`。Pages ではない）。
 何をするものか・どう公開するかは README.md に書いてある。ここは作業するときの決まりごとだけ。
 引き継ぎ（現状・Cloudflare側の設定・踏んだ落とし穴・残課題）は docs/HANDOVER.md、
-台帳の列とカテゴリの一覧は docs/LEDGER.md。
+台帳の列とカテゴリの一覧は docs/LEDGER.md、座標の入れ方は docs/COORDS.md。
 
 ## 作りの前提
 
@@ -30,7 +30,8 @@ Pages用の `pages_build_output_dir` を書くとデプロイが入口を見つ�
 
 `data/spots.json` `data/regions.json` を直したときは `npm run build:spots`。
 `public/spots.js` を手で編集しない。台帳の取り込みは `scripts/import-ledger.py`、
-体験プログラムの調査JSONは `scripts/import-experience.py`。
+体験プログラムの調査JSONは `scripts/import-experience.py`、スポットの追加分のJSONは
+`scripts/import-spots-json.py`（住所から座標を引くときは `--geocode`。docs/COORDS.md）。
 
 ## 触るときに気をつけるところ
 
@@ -47,7 +48,8 @@ Pages用の `pages_build_output_dir` を書くとデプロイが入口を見つ�
   一覧では「地図なし」）。`s.marker` を触る前に必ず存在を確かめる。
   地図に出ないものは埋もれるので、一覧の見出しに「地図なし ◯件」を出して1件目を開けるようにしてある。
   住所から引いた座標（`scripts/geocode-jp.py`、町丁目の代表点）は `approx: true` を付けて、
-  ポップアップに「およその位置」と断る
+  ポップアップに「およその位置」と断る。**推測で座標を作らない**（無いなら持たない）。
+  手順と精度の実測は docs/COORDS.md
 - **さがすは今の地域の中だけ**（`terms` と `hitQ()`）。当てる文字列は `hay()` が作って
   スポットに `q` で覚えさせる（毎回組み直さない）。カタカナ→ひらがな、NFKC、小文字化まで
   そろえてから当てる。地域をまたいで探せないので、0件のときだけ他の地域の件数を出して飛べるようにしてある
